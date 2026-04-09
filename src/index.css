@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-900 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-800 transition-all hover:scale-105 shadow-md hover:shadow-lg flex items-center gap-2;
+  }
+}

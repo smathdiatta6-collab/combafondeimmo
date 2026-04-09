@@ -1,0 +1,542 @@
+import React, { useState, useEffect } from 'react';
+import { useFirebase } from '../contexts/FirebaseContext';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { FileText, Trash2, Plus, ArrowLeft, CheckCircle2, XCircle, Clock, CreditCard, Download, Edit2, Copy } from 'lucide-react';
+import { Link, Navigate } from 'react-router-dom';
+import { generateContractPDF } from '../utils/pdfGenerator';
+import Logo from '../components/Logo';
+
+const AdminContracts: React.FC = () => {
+  const { user, isAdmin, loading } = useFirebase();
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [newContract, setNewContract] = useState({
+    clientName: '',
+    clientCNI: '',
+    clientPhone: '',
+    bailleurName: 'Mariama BA',
+    propertyDesignation: '',
+    propertyAddress: 'Cité BATA',
+    nbNote: '',
+    type: 'Location',
+    price: 0,
+    priceInWords: '',
+    startDate: '',
+    endDate: '',
+    duration: '',
+    villaNumber: '',
+    status: 'Actif'
+  });
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [payingContract, setPayingContract] = useState<any | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
+
+  useEffect(() => {
+    if (user && isAdmin) {
+      fetchContracts();
+      fetchPayments();
+    }
+  }, [user, isAdmin]);
+
+  const formatAmount = (val: number) => {
+    return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  const fetchContracts = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'contracts'));
+      const fetchedContracts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      // Sort alphabetically by client name
+      fetchedContracts.sort((a, b) => (a.clientName || '').localeCompare(b.clientName || ''));
+      setContracts(fetchedContracts);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'contracts');
+    }
+  };
+
+  const fetchPayments = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'paymentMethods'));
+      setPayments(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'paymentMethods');
+    }
+  };
+
+  const handleAddContract = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editingId) {
+        await updateDoc(doc(db, 'contracts', editingId), {
+          ...newContract,
+          updatedByUID: user?.uid,
+          updatedByName: user?.displayName || user?.email,
+          updatedAt: new Date().toISOString()
+        });
+        alert('Contrat mis à jour avec succès !');
+      } else {
+        await addDoc(collection(db, 'contracts'), {
+          ...newContract,
+          createdByUID: user?.uid,
+          createdByName: user?.displayName || user?.email,
+          createdAt: new Date().toISOString()
+        });
+        alert('Contrat enregistré avec succès !');
+      }
+      setNewContract({
+        clientName: '',
+        clientCNI: '',
+        clientPhone: '',
+        bailleurName: 'Mariama BA',
+        propertyDesignation: '',
+        propertyAddress: 'Cité BATA',
+        nbNote: '',
+        type: 'Location',
+        price: 0,
+        priceInWords: '',
+        startDate: '',
+        endDate: '',
+        duration: '',
+        villaNumber: '',
+        status: 'Actif'
+      });
+      setIsAdding(false);
+      setEditingId(null);
+      fetchContracts();
+    } catch (error) {
+      handleFirestoreError(error, editingId ? OperationType.UPDATE : OperationType.CREATE, 'contracts');
+    }
+  };
+
+  const handleEditClick = (contract: any) => {
+    setNewContract({
+      clientName: contract.clientName || '',
+      clientCNI: contract.clientCNI || '',
+      clientPhone: contract.clientPhone || '',
+      bailleurName: contract.bailleurName || 'Mariama BA',
+      propertyDesignation: contract.propertyDesignation || '',
+      propertyAddress: contract.propertyAddress || 'Cité BATA',
+      nbNote: contract.nbNote || '',
+      type: contract.type || 'Location',
+      price: contract.price || 0,
+      priceInWords: contract.priceInWords || '',
+      startDate: contract.startDate || '',
+      endDate: contract.endDate || '',
+      duration: contract.duration || '',
+      villaNumber: contract.villaNumber || '',
+      status: contract.status || 'Actif'
+    });
+    setEditingId(contract.id);
+    setIsAdding(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteContract = async (id: string) => {
+    if (window.confirm('Voulez-vous vraiment supprimer ce contrat ?')) {
+      try {
+        await deleteDoc(doc(db, 'contracts', id));
+        fetchContracts();
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `contracts/${id}`);
+      }
+    }
+  };
+
+  const handleDuplicate = (contract: any) => {
+    setNewContract({
+      clientName: `${contract.clientName} (Copie)`,
+      clientCNI: contract.clientCNI || '',
+      clientPhone: contract.clientPhone || '',
+      bailleurName: contract.bailleurName || 'Mariama BA',
+      propertyDesignation: contract.propertyDesignation || '',
+      propertyAddress: contract.propertyAddress || 'Cité BATA',
+      nbNote: contract.nbNote || '',
+      type: contract.type || 'Location',
+      price: contract.price || 0,
+      priceInWords: contract.priceInWords || '',
+      startDate: contract.startDate || '',
+      endDate: contract.endDate || '',
+      duration: contract.duration || '',
+      villaNumber: contract.villaNumber || '',
+      status: 'Actif'
+    });
+    setEditingId(null);
+    setIsAdding(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleMarkAsPaid = async () => {
+    if (!payingContract || !selectedPaymentMethod) return;
+
+    try {
+      // 1. Update contract status
+      await updateDoc(doc(db, 'contracts', payingContract.id), { status: 'Payé' });
+
+      // 2. Create receipt
+      await addDoc(collection(db, 'receipts'), {
+        clientName: payingContract.clientName,
+        amount: payingContract.price,
+        amountInWords: payingContract.priceInWords || '',
+        date: new Date().toISOString().split('T')[0],
+        periodStart: payingContract.startDate || '',
+        periodEnd: payingContract.endDate || '',
+        contractId: payingContract.id,
+        paymentMethodId: selectedPaymentMethod,
+        reference: `PAY-${payingContract.id.substring(0, 5).toUpperCase()}`,
+        createdByUID: user?.uid,
+        createdByName: user?.displayName || user?.email,
+        createdAt: new Date().toISOString()
+      });
+
+      setPayingContract(null);
+      setSelectedPaymentMethod('');
+      fetchContracts();
+      alert('Contrat marqué comme payé et quittance générée !');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `contracts/${payingContract.id}`);
+    }
+  };
+
+  if (loading) return <div className="pt-32 text-center">Chargement...</div>;
+  if (!user || !isAdmin) return <Navigate to="/" />;
+
+  return (
+    <div className="pt-32 pb-24 min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Link to="/admin" className="flex items-center gap-2 text-gray-600 hover:text-blue-600 font-medium mb-8 transition-colors group">
+          <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+          Retour au Dashboard
+        </Link>
+
+        <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
+          <div className="flex items-center gap-6">
+            <Logo className="h-16" />
+            <h1 className="text-4xl font-bold text-gray-900">Contrats</h1>
+          </div>
+          <button
+            onClick={() => {
+              if (isAdding && editingId) {
+                setEditingId(null);
+                setNewContract({
+                  clientName: '',
+                  clientCNI: '',
+                  clientPhone: '',
+                  bailleurName: 'Mariama BA',
+                  propertyDesignation: '',
+                  propertyAddress: 'Cité BATA',
+                  nbNote: '',
+                  type: 'Location',
+                  price: 0,
+                  priceInWords: '',
+                  startDate: '',
+                  endDate: '',
+                  duration: '',
+                  villaNumber: '',
+                  status: 'Actif'
+                });
+              }
+              setIsAdding(!isAdding);
+            }}
+            className="bg-blue-900 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-800 transition-all shadow-lg"
+          >
+            <Plus size={20} />
+            {isAdding && editingId ? 'Annuler l\'édition' : 'Ajouter un contrat'}
+          </button>
+        </div>
+
+        {isAdding && (
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 mb-12">
+            <h3 className="text-2xl font-bold mb-6">{editingId ? 'Modifier le Contrat' : 'Nouveau Contrat'}</h3>
+            <form onSubmit={handleAddContract} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Client Info */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Nom du Client</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.clientName}
+                  onChange={(e) => setNewContract({ ...newContract, clientName: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">CNI du Client</label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.clientCNI}
+                  onChange={(e) => setNewContract({ ...newContract, clientCNI: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Téléphone du Client</label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.clientPhone}
+                  onChange={(e) => setNewContract({ ...newContract, clientPhone: e.target.value })}
+                />
+              </div>
+
+              {/* Bailleur Info */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Nom du Bailleur</label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.bailleurName}
+                  onChange={(e) => setNewContract({ ...newContract, bailleurName: e.target.value })}
+                />
+              </div>
+
+              {/* Property Info */}
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Désignation de l'appartement</label>
+                <textarea
+                  required
+                  placeholder="ex: 2 Chambres + Salon + Cuisine + Toilette"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all min-h-[100px] resize-none"
+                  value={newContract.propertyDesignation}
+                  onChange={(e) => setNewContract({ ...newContract, propertyDesignation: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Adresse du Bien</label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.propertyAddress}
+                  onChange={(e) => setNewContract({ ...newContract, propertyAddress: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Note NB</label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.nbNote}
+                  onChange={(e) => setNewContract({ ...newContract, nbNote: e.target.value })}
+                />
+              </div>
+
+              {/* Contract Details */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Type</label>
+                <select
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                  value={newContract.type}
+                  onChange={(e) => setNewContract({ ...newContract, type: e.target.value })}
+                >
+                  <option value="Location">Location</option>
+                  <option value="Vente">Vente</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Prix (FCFA)</label>
+                <input
+                  type="number"
+                  required
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.price}
+                  onChange={(e) => setNewContract({ ...newContract, price: parseInt(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Prix en toutes lettres</label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.priceInWords}
+                  onChange={(e) => setNewContract({ ...newContract, priceInWords: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Date de début</label>
+                <input
+                  type="date"
+                  required
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.startDate}
+                  onChange={(e) => setNewContract({ ...newContract, startDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Date de fin</label>
+                <input
+                  type="text"
+                  placeholder="ex: Décembre 2024"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.endDate}
+                  onChange={(e) => setNewContract({ ...newContract, endDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Durée (ex: 1 an)</label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.duration}
+                  onChange={(e) => setNewContract({ ...newContract, duration: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Villa N° (Footer)</label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={newContract.villaNumber}
+                  onChange={(e) => setNewContract({ ...newContract, villaNumber: e.target.value })}
+                />
+              </div>
+              <div className="flex gap-4 md:col-span-2 lg:col-span-3">
+                <button type="submit" className="bg-blue-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all">
+                  {editingId ? 'Mettre à jour' : 'Enregistrer'}
+                </button>
+                <button type="button" onClick={() => {
+                  setIsAdding(false);
+                  setEditingId(null);
+                  setNewContract({
+                    clientName: '',
+                    clientCNI: '',
+                    clientPhone: '',
+                    bailleurName: 'Mariama BA',
+                    propertyDesignation: '',
+                    propertyAddress: 'Cité BATA',
+                    nbNote: '',
+                    type: 'Location',
+                    price: 0,
+                    priceInWords: '',
+                    startDate: '',
+                    endDate: '',
+                    duration: '',
+                    villaNumber: '',
+                    status: 'Actif'
+                  });
+                }} className="bg-gray-200 text-gray-700 px-8 py-4 rounded-2xl font-bold hover:bg-gray-300 transition-all">
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Payment Modal */}
+        {payingContract && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl max-w-md w-full">
+              <h3 className="text-2xl font-bold mb-6">Confirmer le paiement</h3>
+              <p className="text-gray-600 mb-6">
+                Sélectionnez le mode de paiement utilisé par <strong>{payingContract.clientName}</strong> pour ce contrat.
+              </p>
+              <div className="space-y-4 mb-8">
+                <label className="text-sm font-bold text-gray-700 ml-1">Mode de Paiement</label>
+                <select
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                  value={selectedPaymentMethod}
+                  onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                >
+                  <option value="">Choisir un mode...</option>
+                  {payments.map(p => <option key={p.id} value={p.id}>{p.name} ({p.type})</option>)}
+                </select>
+              </div>
+              <div className="flex gap-4">
+                <button
+                  onClick={handleMarkAsPaid}
+                  disabled={!selectedPaymentMethod}
+                  className="flex-1 bg-blue-900 text-white py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all disabled:opacity-50"
+                >
+                  Confirmer
+                </button>
+                <button
+                  onClick={() => setPayingContract(null)}
+                  className="flex-1 bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold hover:bg-gray-300 transition-all"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {contracts.map((contract) => (
+            <div key={contract.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between group hover:shadow-xl transition-all">
+              <div>
+                <div className="flex justify-between items-start mb-6">
+                  <div className="w-14 h-14 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center">
+                    <FileText size={28} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleDuplicate(contract)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Dupliquer"
+                    >
+                      <Copy size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleEditClick(contract)}
+                      className="text-gray-400 hover:text-orange-600 transition-colors"
+                      title="Modifier le contrat"
+                    >
+                      <Edit2 size={20} />
+                    </button>
+                    <button
+                      onClick={() => generateContractPDF(contract)}
+                      className="text-gray-400 hover:text-blue-600 transition-colors"
+                      title="Télécharger le contrat"
+                    >
+                      <Download size={20} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteContract(contract.id)}
+                      className="text-gray-400 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">{contract.clientName}</h3>
+                <p className="text-purple-600 font-bold text-sm mb-4">{contract.type} - {contract.propertyDesignation}</p>
+                <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
+                  <div className="flex items-center gap-1">
+                    <Clock size={14} />
+                    {contract.startDate}
+                  </div>
+                  <div className="font-bold text-green-600">
+                    {formatAmount(contract.price)} FCFA
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 pt-6 border-t border-gray-50 flex items-center justify-between">
+                <span className={`px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 ${
+                  contract.status === 'Actif' ? 'bg-blue-100 text-blue-700' : 
+                  contract.status === 'Payé' ? 'bg-green-100 text-green-700' : 
+                  contract.status === 'Terminé' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {contract.status === 'Actif' ? <Clock size={14} /> : 
+                   contract.status === 'Payé' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                  {contract.status}
+                </span>
+
+                {contract.status === 'Actif' && (
+                  <button
+                    onClick={() => setPayingContract(contract)}
+                    className="flex items-center gap-2 text-blue-900 font-bold text-sm hover:underline"
+                  >
+                    <CreditCard size={16} />
+                    Payer
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AdminContracts;

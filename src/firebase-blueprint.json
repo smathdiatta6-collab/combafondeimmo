@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "PaymentMethod": {
+      "title": "Mode de Paiement",
+      "description": "Détails des comptes de paiement (Wave, Orange Money, etc.)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nom du mode de paiement (ex: Wave)" },
+        "type": { "type": "string", "enum": ["Wave", "Orange Money", "Virement Bancaire", "Espèces"], "description": "Type de paiement" },
+        "details": { "type": "string", "description": "Numéro ou détails du compte" },
+        "isActive": { "type": "boolean", "description": "Si ce mode est actif" }
+      },
+      "required": ["name", "type", "details"]
+    },
+    "Contract": {
+      "title": "Contrat",
+      "description": "Contrats de location ou de vente",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string", "description": "Nom du client" },
+        "clientEmail": { "type": "string", "format": "email", "description": "Email du client" },
+        "clientCNI": { "type": "string", "description": "CNI du client" },
+        "clientPhone": { "type": "string", "description": "Téléphone du client" },
+        "bailleurName": { "type": "string", "description": "Prénom et nom du Bailleur" },
+        "propertyId": { "type": "string", "description": "ID du bien immobilier" },
+        "propertyDesignation": { "type": "string", "description": "Désignation du bien (chambres, salon...)" },
+        "propertyAddress": { "type": "string", "description": "Adresse du bien" },
+        "nbNote": { "type": "string", "description": "Note NB" },
+        "type": { "type": "string", "enum": ["Location", "Vente"], "description": "Type de contrat" },
+        "price": { "type": "number", "description": "Montant total" },
+        "priceInWords": { "type": "string", "description": "Prix en toutes lettres" },
+        "startDate": { "type": "string", "format": "date", "description": "Date de début" },
+        "endDate": { "type": "string", "description": "Date de fin" },
+        "duration": { "type": "string", "description": "Durée du contrat" },
+        "villaNumber": { "type": "string", "description": "Numéro de villa pour le footer" },
+        "status": { "type": "string", "enum": ["Actif", "Payé", "Terminé", "Annulé"], "description": "Statut du contrat" }
+      },
+      "required": ["clientName", "propertyId", "type", "price", "startDate", "status"]
+    },
+    "Receipt": {
+      "title": "Quittance",
+      "description": "Reçus de paiement générés",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string", "description": "Nom du client" },
+        "amount": { "type": "number", "description": "Montant payé" },
+        "date": { "type": "string", "format": "date", "description": "Date du paiement" },
+        "contractId": { "type": "string", "description": "ID du contrat associé" },
+        "paymentMethodId": { "type": "string", "description": "ID du mode de paiement utilisé" },
+        "reference": { "type": "string", "description": "Référence de la transaction" }
+      },
+      "required": ["clientName", "amount", "date", "contractId", "paymentMethodId"]
+    },
+    "MonthlyReport": {
+      "title": "Bilan Mensuel",
+      "description": "Bilans mensuels pour les bailleurs",
+      "type": "object",
+      "properties": {
+        "chez": { "type": "string", "description": "Chez (Bailleur)" },
+        "mois": { "type": "string", "description": "Mois du bilan" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "prenoms": { "type": "string" },
+              "nom": { "type": "string" },
+              "montantLoyer": { "type": "number" },
+              "montantPaye": { "type": "number" },
+              "montantNonPaye": { "type": "number" }
+            }
+          }
+        },
+        "totalCommission": { "type": "number" },
+        "totalRemettre": { "type": "number" },
+        "arreteSomme": { "type": "string", "description": "Somme arrêtée en lettres et chiffres" },
+        "date": { "type": "string", "format": "date" },
+        "villaNumber": { "type": "string" }
+      },
+      "required": ["chez", "mois", "items", "totalCommission", "totalRemettre", "arreteSomme", "date"]
+    },
+    "UserProfile": {
+      "title": "Profil Utilisateur",
+      "description": "Informations sur l'utilisateur et son rôle",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "displayName": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/paymentMethods/{methodId}": {
+      "schema": "PaymentMethod",
+      "description": "Collection des modes de paiement"
+    },
+    "/contracts/{contractId}": {
+      "schema": "Contract",
+      "description": "Collection des contrats"
+    },
+    "/receipts/{receiptId}": {
+      "schema": "Receipt",
+      "description": "Collection des quittances"
+    },
+    "/monthlyReports/{reportId}": {
+      "schema": "MonthlyReport",
+      "description": "Collection des bilans mensuels"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Profils des utilisateurs"
+    }
+  }
+}

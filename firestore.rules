@@ -1,0 +1,172 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: paymentMethods
+    // Fields:
+    //   - name: string (required)
+    //   - type: string (required, enum: ["Wave", "Orange Money", "Virement Bancaire", "Espèces"])
+    //   - details: string (required)
+    //   - isActive: bool (optional)
+    //
+    // Collection: contracts
+    // Fields:
+    //   - clientName: string (required)
+    //   - clientEmail: string (optional, email format)
+    //   - propertyId: string (required)
+    //   - type: string (required, enum: ["Location", "Vente"])
+    //   - price: number (required, positive)
+    //   - startDate: string (required, date format)
+    //   - endDate: string (optional, date format)
+    //   - status: string (required, enum: ["Actif", "Terminé", "Annulé"])
+    //
+    // Collection: receipts
+    // Fields:
+    //   - clientName: string (required)
+    //   - amount: number (required, positive)
+    //   - date: string (required, date format)
+    //   - contractId: string (required)
+    //   - paymentMethodId: string (required)
+    //   - reference: string (optional)
+    //
+    // Collection: users
+    // Fields:
+    //   - email: string (required, email format)
+    //   - role: string (required, enum: ["admin", "user"])
+    //   - displayName: string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         isSuperAdmin());
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() &&
+             request.auth.token.email == "smathdiatta6@gmail.com" &&
+             request.auth.token.email_verified == true;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}.*");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidPaymentMethod(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.type in ["Wave", "Orange Money", "Virement Bancaire", "Espèces"] &&
+             data.details is string && data.details.size() > 0 && data.details.size() < 500;
+    }
+
+    function isValidContract(data) {
+      return data.clientName is string && data.clientName.size() > 0 && data.clientName.size() < 100 &&
+             data.propertyId is string && data.propertyId.size() > 0 &&
+             data.type in ["Location", "Vente"] &&
+             data.price is number && data.price > 0 &&
+             isValidDateString(data.startDate) &&
+             data.status in ["Actif", "Payé", "Terminé", "Annulé"];
+    }
+
+    function isValidReceipt(data) {
+      return data.clientName is string && data.clientName.size() > 0 && data.clientName.size() < 100 &&
+             data.amount is number && data.amount > 0 &&
+             isValidDateString(data.date) &&
+             data.contractId is string &&
+             data.paymentMethodId is string;
+    }
+
+    function isValidProperty(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.city is string && data.city.size() > 0 && data.city.size() < 100 &&
+             data.type in ["Maison", "Villa", "Terrain", "Appartement"] &&
+             data.price is number && data.price >= 0 &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 2000 &&
+             data.image is string && data.image.size() > 0 &&
+             data.features is list && data.features.size() <= 20;
+    }
+
+    function isValidUserProfile(data) {
+      return data.email is string && isValidEmail(data.email) &&
+             data.role in ["admin", "user"];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /paymentMethods/{methodId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /contracts/{contractId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /receipts/{receiptId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /monthlyReports/{reportId} {
+      allow read, write: if isAdmin();
+    }
+    
+    function isValidContact(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() < 200 &&
+             data.message is string && data.message.size() > 0 && data.message.size() < 5000 &&
+             data.createdAt is string &&
+             data.status in ["unread", "read"];
+    }
+
+    match /contacts/{contactId} {
+      allow create: if true;
+      allow read, write: if isAdmin();
+    }
+
+    match /properties/{propertyId} {
+      allow read: if true;
+      allow write: if isSuperAdmin() && isValidProperty(request.resource.data);
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUserProfile(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUserProfile(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
