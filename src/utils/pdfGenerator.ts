@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { numberToWordsFrench } from './numberToWords';
 
 const addFooter = (doc: jsPDF, villaNumber: string = '...') => {
   try {
@@ -75,114 +76,112 @@ const safeToLocaleString = (val: any) => {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
-export const generateReceiptPDF = (receipt: any, contract: any, paymentMethod: any) => {
+export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?: any) => {
   try {
-    // A6 format: 105 x 148 mm
+    // A5 format: 148 x 210 mm (Portrait)
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: 'a6'
+      format: 'a5'
     });
     
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 8;
-    const contentWidth = pageWidth - (margin * 2);
+    const margin = 10;
     
-    let y = margin;
+    // Draw Outer Border
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.3);
+    doc.rect(margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2));
     
-    // Header
-    drawLogo(doc, margin, y - 5, 0.8);
+    // --- MAIN CONTENT AREA ---
+    const mainX = margin + 10;
+    const mainContentWidth = pageWidth - (margin * 2) - 10;
+    let currentY = margin + 12;
     
-    y += 15;
+    // Logo and Agency Info (Centered)
+    drawLogo(doc, pageWidth / 2 - 15, currentY - 10, 0.8);
     doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('times', 'bold');
+    doc.setTextColor(30, 58, 138);
+    doc.text('Tél : 77 551 96 83 Cité Bata - Rufisque', pageWidth / 2, currentY + 8, { align: 'center' });
     doc.setTextColor(0);
-    doc.text('Tél : 77 551 96 83 – Cité Bata, Rufisque', margin, y);
+
+    // Total Amount (Clearly separated)
+    const totalAmount = (receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0);
+    currentY += 20;
+    doc.setFontSize(12);
+    doc.setFont('times', 'bold');
+    doc.text(`MONTANT : ${safeToLocaleString(totalAmount)} FCFA`, pageWidth - margin - 10, currentY, { align: 'right' });
     
-    y += 8;
+    currentY += 12;
+    
     // Title
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('QUITTANCE DE LOYER', pageWidth / 2, y, { align: 'center' });
+    doc.setFontSize(16);
+    doc.setFont('times', 'bold');
+    doc.text('QUITTANCE DE LOYER', pageWidth / 2, currentY, { align: 'center' });
     
-    y += 8;
-    // Receipt Number
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    const receiptNo = receipt.reference || receipt.id?.substring(0, 8).toUpperCase() || '..........................';
-    doc.text(`N° : ${receiptNo}`, margin, y);
+    currentY += 15;
+    doc.setFontSize(12);
+    doc.setFont('times', 'normal');
+    const lineSpacing = 12;
+
+    // Reçu de M.
+    doc.text(`Reçu de M.`, mainX, currentY);
+    doc.setFont('times', 'bold');
+    doc.text(receipt.clientName || '................................................', mainX + 25, currentY);
     
-    y += 8;
-    const lineSpacing = 5;
+    currentY += lineSpacing;
     
-    // Body content
-    doc.setFontSize(9);
+    // La somme de
+    doc.setFont('times', 'normal');
+    doc.text(`la somme de`, mainX, currentY);
+    doc.setFont('times', 'italic');
+    const amountWords = receipt.amountInWords || numberToWordsFrench(totalAmount);
+    const splitWords = doc.splitTextToSize(amountWords, mainContentWidth - 30);
+    doc.text(splitWords, mainX + 30, currentY);
     
-    // Montant payé
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Montant payé : ${safeToLocaleString(receipt.amount)} FCFA.`, margin, y);
-    y += lineSpacing;
+    const wordsLines = splitWords.length;
+    currentY += (wordsLines * 6);
+    doc.setFont('times', 'normal');
+    doc.text(`de loyer des locaux qu'il occupe`, mainX, currentY);
     
-    // En lettres
-    doc.setFont('helvetica', 'normal');
-    doc.text(`En lettres : ${receipt.amountInWords || '................................................'}`, margin, y);
-    y += lineSpacing + 2;
+    currentY += lineSpacing;
     
-    // Reçu de
-    const address = contract?.propertyAddress || 'Rufisque';
-    const receivedText = `Reçu de ${receipt.clientName || '....................'}, la somme susmentionnée en paiement du loyer des locaux qu’elle occupe dans la maison située à ${address}.`;
-    const splitReceived = doc.splitTextToSize(receivedText, contentWidth);
-    doc.text(splitReceived, margin, y);
-    y += (splitReceived.length * lineSpacing);
+    // Période
+    doc.text(`pour la période de :`, mainX, currentY);
+    doc.setFont('times', 'bold');
+    doc.text(receipt.periodLabel || 'un mois', mainX + 35, currentY);
+    
+    currentY += lineSpacing;
+    
+    // Locaux
+    const address = receipt.propertyAddress || contract?.propertyAddress || '................................................';
+    doc.text(`dans la maison située à :`, mainX, currentY);
+    currentY += 7;
+    doc.setFont('times', 'bold');
+    doc.text(address, mainX, currentY);
+    
+    currentY += lineSpacing;
     
     // Period
     const pStart = receipt.periodStart ? new Date(receipt.periodStart).toLocaleDateString('fr-FR') : '.......';
     const pEnd = receipt.periodEnd ? new Date(receipt.periodEnd).toLocaleDateString('fr-FR') : '.......';
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Période :`, margin, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(` du ${pStart} au ${pEnd}`, margin + 15, y);
-    y += lineSpacing + 2;
+    doc.setFont('times', 'normal');
+    doc.text(`le dit commençant le ${pStart}`, mainX, currentY);
+    currentY += 7;
+    doc.text(`et finissant le ${pEnd}`, mainX, currentY);
     
-    // Date de délivrance
+    currentY += 15;
+    
+    // Bottom section
+    doc.setFont('times', 'bold');
+    doc.text('DONT QUITTANCE', pageWidth / 2, currentY, { align: 'center' });
+    
     const formattedDate = receipt.date ? new Date(receipt.date).toLocaleDateString('fr-FR') : '...... / ...... / 20......';
-    doc.text(`Date de délivrance : ${formattedDate}`, margin, y);
-    y += lineSpacing + 4;
-    
-    // DONT QUITTANCE
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('DONT QUITTANCE', pageWidth / 2, y, { align: 'center' });
-    y += 8;
-    
-    // Signature
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Signature du bailleur', pageWidth - margin, y, { align: 'right' });
-    
-    y += 12;
-    
-    // NOTA section (compact)
-    doc.setFontSize(6.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('NOTA : un locataire ne peut déménager :', margin, y);
-    y += 3.5;
-    
-    doc.setFont('helvetica', 'normal');
-    const notaPoints = [
-      "Qu'il n'ait justifié au propriétaire par une quittance du percepteur qu'il a acquitté toutes ses conditions personnelles et immobilières de l'année courante.",
-      "Qu'il n'ait donné ou reçu congé par écrit dans les délais prescrits.",
-      "Qu'il n'ait fait faire toutes les réparations locatives à sa charge suivant l'usage ou d'après l'état des lieux s'il en existe un, il ne pourra sous louer en tout ou en partie les locaux cédés sans le consentement du propriétaire."
-    ];
-    
-    notaPoints.forEach(point => {
-      const splitPoint = doc.splitTextToSize(`- ${point}`, contentWidth - 2);
-      doc.text(splitPoint, margin + 2, y);
-      y += (splitPoint.length * 2.8);
-    });
-    
-    addFooter(doc, contract?.villaNumber);
+    doc.setFont('times', 'normal');
+    currentY += 10;
+    doc.text(`Fait à Rufisque, le ${formattedDate}`, pageWidth - margin - 10, currentY, { align: 'right' });
     
     doc.save(`Quittance_${receipt.clientName || 'Client'}_${receipt.date || 'Date'}.pdf`);
   } catch (error) {
@@ -389,7 +388,7 @@ export const generateMonthlyReportPDF = (report: any) => {
       { id: 'nom', label: 'Nom', type: 'text' },
       { id: 'montantLoyer', label: 'Loyer', type: 'number' },
       { id: 'montantPaye', label: 'Payé', type: 'number' },
-      { id: 'montantNonPaye', label: 'Reliquat', type: 'number' },
+      { id: 'montantNonPaye', label: 'Non Payé', type: 'number' },
     ];
 
     const tableHead = [columns.map((col: any) => col.label)];
@@ -400,8 +399,21 @@ export const generateMonthlyReportPDF = (report: any) => {
       })
     );
 
-    // Add custom rows if any
+    // Add totals as rows in the table
+    const totalPaye = (report.items || []).reduce((sum: number, item: any) => sum + (Number(item.montantPaye) || 0), 0);
     const colSpan = Math.max(1, columns.length - 2);
+    
+    tableBody.push([
+      { content: 'TOTAL', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: `${safeToLocaleString(totalPaye)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+    ]);
+
+    tableBody.push([
+      { content: 'Commission', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: `${safeToLocaleString(report.totalCommission)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+    ]);
+
+    // Add custom rows if any
     if (report.customRows && Array.isArray(report.customRows) && report.customRows.length > 0) {
       report.customRows.forEach((row: any) => {
         if (row && row.label) {
@@ -413,11 +425,6 @@ export const generateMonthlyReportPDF = (report: any) => {
       });
     }
 
-    // Add totals as rows in the table
-    tableBody.push([
-      { content: 'Commission', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: `${safeToLocaleString(report.totalCommission)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
-    ]);
     tableBody.push([
       { content: 'Total à remettre', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
       { content: `${safeToLocaleString(report.totalRemettre)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
@@ -428,8 +435,19 @@ export const generateMonthlyReportPDF = (report: any) => {
       head: tableHead,
       body: tableBody,
       theme: 'grid',
-      headStyles: { fillColor: [30, 58, 138], halign: 'center', fontStyle: 'bold' },
-      styles: { fontSize: 10, cellPadding: 3 },
+      headStyles: { 
+        fillColor: [30, 58, 138], 
+        halign: 'center', 
+        fontStyle: 'bold',
+        lineWidth: 0.1,
+        lineColor: [200, 200, 200]
+      },
+      styles: { 
+        fontSize: 10, 
+        cellPadding: 3,
+        lineWidth: 0.1,
+        lineColor: [200, 200, 200]
+      },
       columnStyles: columns.reduce((acc: any, col: any, idx: number) => {
         if (col.type === 'number') {
           acc[idx] = { halign: 'right' };

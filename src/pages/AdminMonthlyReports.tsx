@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { FileBarChart, Trash2, Plus, ArrowLeft, Download, UserPlus, X, Edit2, Search, Copy, Settings, ChevronUp, ChevronDown } from 'lucide-react';
-import { Link, Navigate } from 'react-router-dom';
+import { FileBarChart, Trash2, Plus, ArrowLeft, Download, UserPlus, X, Edit2, Search, Copy, Settings, ChevronUp, ChevronDown, Receipt } from 'lucide-react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { generateMonthlyReportPDF } from '../utils/pdfGenerator';
 import { numberToWordsFrench } from '../utils/numberToWords';
 import Logo from '../components/Logo';
@@ -16,6 +16,7 @@ interface Column {
 
 const AdminMonthlyReports: React.FC = () => {
   const { user, isAdmin, loading } = useFirebase();
+  const navigate = useNavigate();
   const [reports, setReports] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -31,7 +32,7 @@ const AdminMonthlyReports: React.FC = () => {
     { id: 'nom', label: 'Nom', type: 'text' },
     { id: 'montantLoyer', label: 'Loyer', type: 'number' },
     { id: 'montantPaye', label: 'Payé', type: 'number' },
-    { id: 'montantNonPaye', label: 'Reliquat', type: 'number' },
+    { id: 'montantNonPaye', label: 'Non Payé', type: 'number' },
   ];
 
   const [newReport, setNewReport] = useState({
@@ -82,20 +83,27 @@ const AdminMonthlyReports: React.FC = () => {
   }, [newReport, isAdding, editingId]);
 
   useEffect(() => {
+    const words = numberToWordsFrench(newReport.totalRemettre);
+    const formatted = newReport.totalRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    
+    setNewReport(prev => ({
+      ...prev,
+      arreteSomme: `${words} FRANCS CFA (${formatted})`
+    }));
+  }, [newReport.totalRemettre]);
+
+  const calculateTotals = () => {
     const totalPaye = newReport.items.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0);
     const commission = Math.round(totalPaye * (newReport.commissionPercentage / 100));
-    const aRemettre = totalPaye - commission;
-    
-    const words = numberToWordsFrench(aRemettre);
-    const formatted = aRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+    const aRemettre = totalPaye - commission - totalCustom;
     
     setNewReport(prev => ({
       ...prev,
       totalCommission: commission,
-      totalRemettre: aRemettre,
-      arreteSomme: `${words} FRANCS CFA (${formatted})`
+      totalRemettre: aRemettre
     }));
-  }, [newReport.items, newReport.commissionPercentage]);
+  };
 
   const months = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -183,10 +191,7 @@ const AdminMonthlyReports: React.FC = () => {
     
     setIsSaving(true);
     try {
-      // Sort items alphabetically by the first column (usually prenoms) before saving
-      const firstColId = newReport.columns[0]?.id || 'prenoms';
-      const sortedItems = [...newReport.items].sort((a, b) => (String(a[firstColId]) || '').localeCompare(String(b[firstColId]) || ''));
-      const reportToSave = { ...newReport, items: sortedItems };
+      const reportToSave = { ...newReport };
 
       if (editingId) {
         await updateDoc(doc(db, 'monthlyReports', editingId), {
@@ -283,6 +288,18 @@ const AdminMonthlyReports: React.FC = () => {
     report.chez?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     report.mois?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleGenerateReceipts = (report: any) => {
+    if (window.confirm(`Voulez-vous générer les quittances pour tous les locataires de ce bilan (${report.items.length}) ?`)) {
+      // We'll pass the data via state to the receipts page
+      navigate('/admin/quittances', { 
+        state: { 
+          fromReport: true,
+          reportData: report
+        } 
+      });
+    }
+  };
 
   if (loading) return <div className="pt-32 text-center">Chargement...</div>;
   if (!user || !isAdmin) return <Navigate to="/" />;
@@ -600,30 +617,53 @@ const AdminMonthlyReports: React.FC = () => {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 ml-1">Commission ({newReport.commissionPercentage}%)</label>
-                  <input
-                    type="number"
-                    readOnly
-                    className="w-full px-5 py-4 bg-gray-100 border-none rounded-2xl focus:ring-0 outline-none cursor-not-allowed font-bold text-blue-700"
-                    value={newReport.totalCommission || 0}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 ml-1">Total à Remettre</label>
-                  <input
-                    type="number"
-                    readOnly
-                    className="w-full px-5 py-4 bg-gray-100 border-none rounded-2xl focus:ring-0 outline-none cursor-not-allowed font-bold text-green-700"
-                    value={newReport.totalRemettre || 0}
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold text-gray-700 ml-1">Arrêté à la somme de (Généré automatiquement)</label>
+                  <label className="text-sm font-bold text-gray-700 ml-1">TOTAL (Somme des Payés)</label>
                   <input
                     type="text"
                     readOnly
-                    className="w-full px-5 py-4 bg-gray-100 border-none rounded-2xl focus:ring-0 outline-none cursor-not-allowed font-bold text-gray-700"
+                    className="w-full px-5 py-4 bg-gray-100 border-none rounded-2xl focus:ring-0 outline-none cursor-not-allowed font-bold text-gray-900"
+                    value={formatAmount(newReport.items.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 ml-1">Commission ({newReport.commissionPercentage}%)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-700"
+                      value={newReport.totalCommission || 0}
+                      onChange={(e) => setNewReport({ ...newReport, totalCommission: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 ml-1">Total à Remettre</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-green-500 outline-none transition-all font-bold text-green-700"
+                      value={newReport.totalRemettre || 0}
+                      onChange={(e) => setNewReport({ ...newReport, totalRemettre: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2 flex items-end">
+                  <button
+                    type="button"
+                    onClick={calculateTotals}
+                    className="w-full h-[60px] bg-blue-100 text-blue-700 font-bold rounded-2xl hover:bg-blue-200 transition-all flex items-center justify-center gap-2 shadow-sm"
+                    title="Calculer automatiquement basé sur le pourcentage et les loyers payés"
+                  >
+                    <Settings size={20} /> Calculer Auto.
+                  </button>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-bold text-gray-700 ml-1">Arrêté à la somme de</label>
+                  <input
+                    type="text"
+                    className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-700"
                     value={newReport.arreteSomme}
+                    onChange={(e) => setNewReport({ ...newReport, arreteSomme: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -796,12 +836,18 @@ const AdminMonthlyReports: React.FC = () => {
                   <p>Date: {report.date}</p>
                 </div>
               </div>
-              <div className="mt-6 pt-6 border-t border-gray-50">
+              <div className="mt-6 pt-6 border-t border-gray-50 space-y-3">
                 <button
                   onClick={() => generateMonthlyReportPDF(report)}
                   className="w-full text-blue-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
                 >
                   Télécharger Bilan PDF <Download size={16} />
+                </button>
+                <button
+                  onClick={() => handleGenerateReceipts(report)}
+                  className="w-full text-orange-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
+                >
+                  Générer les Quittances <Receipt size={16} />
                 </button>
               </div>
             </div>

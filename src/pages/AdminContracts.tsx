@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { FileText, Trash2, Plus, ArrowLeft, CheckCircle2, XCircle, Clock, CreditCard, Download, Edit2, Copy } from 'lucide-react';
+import { FileText, Trash2, Plus, ArrowLeft, CheckCircle2, XCircle, Clock, CreditCard, Download, Edit2, Copy, Search } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { generateContractPDF } from '../utils/pdfGenerator';
 import Logo from '../components/Logo';
@@ -11,6 +11,7 @@ const AdminContracts: React.FC = () => {
   const { user, isAdmin, loading } = useFirebase();
   const [contracts, setContracts] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [receipts, setReceipts] = useState<any[]>([]);
   const [newContract, setNewContract] = useState({
     clientName: '',
     clientCNI: '',
@@ -30,15 +31,26 @@ const AdminContracts: React.FC = () => {
   });
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [payingContract, setPayingContract] = useState<any | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (user && isAdmin) {
       fetchContracts();
       fetchPayments();
+      fetchReceipts();
     }
   }, [user, isAdmin]);
+
+  const fetchReceipts = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'receipts'));
+      setReceipts(querySnapshot.docs.map(doc => doc.data()));
+    } catch (error) {
+      console.error('Error fetching receipts:', error);
+    }
+  };
+
+  const existingBailleurNames = Array.from(new Set(contracts.map(c => c.bailleurName))).filter(Boolean).sort();
 
   const formatAmount = (val: number) => {
     return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -48,8 +60,8 @@ const AdminContracts: React.FC = () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'contracts'));
       const fetchedContracts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      // Sort alphabetically by client name
-      fetchedContracts.sort((a, b) => (a.clientName || '').localeCompare(b.clientName || ''));
+      // Sort alphabetically by bailleur name
+      fetchedContracts.sort((a, b) => (a.bailleurName || '').localeCompare(b.bailleurName || ''));
       setContracts(fetchedContracts);
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'contracts');
@@ -167,35 +179,42 @@ const AdminContracts: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleMarkAsPaid = async () => {
-    if (!payingContract || !selectedPaymentMethod) return;
+  const filteredContracts = contracts.filter(contract => 
+    (contract.bailleurName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (contract.clientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (contract.propertyDesignation || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (contract.villaNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-    try {
-      // 1. Update contract status
-      await updateDoc(doc(db, 'contracts', payingContract.id), { status: 'Payé' });
-
-      // 2. Create receipt
-      await addDoc(collection(db, 'receipts'), {
-        clientName: payingContract.clientName,
-        amount: payingContract.price,
-        amountInWords: payingContract.priceInWords || '',
-        date: new Date().toISOString().split('T')[0],
-        periodStart: payingContract.startDate || '',
-        periodEnd: payingContract.endDate || '',
-        contractId: payingContract.id,
-        paymentMethodId: selectedPaymentMethod,
-        reference: `PAY-${payingContract.id.substring(0, 5).toUpperCase()}`,
-        createdByUID: user?.uid,
-        createdByName: user?.displayName || user?.email,
-        createdAt: new Date().toISOString()
-      });
-
-      setPayingContract(null);
-      setSelectedPaymentMethod('');
-      fetchContracts();
-      alert('Contrat marqué comme payé et quittance générée !');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `contracts/${payingContract.id}`);
+  const handleRemoveDuplicates = async () => {
+    if (!window.confirm('Voulez-vous vraiment supprimer les contrats en double (même bailleur, même locataire, même montant) ?')) return;
+    
+    const seen = new Set();
+    const duplicates = [];
+    
+    for (const contract of contracts) {
+      const key = `${contract.bailleurName}-${contract.clientName}-${contract.price}-${contract.propertyDesignation}`;
+      if (seen.has(key)) {
+        duplicates.push(contract.id);
+      } else {
+        seen.add(key);
+      }
+    }
+    
+    if (duplicates.length === 0) {
+      alert('Aucun doublon trouvé.');
+      return;
+    }
+    
+    if (window.confirm(`${duplicates.length} doublon(s) trouvé(s). Supprimer ?`)) {
+      try {
+        await Promise.all(duplicates.map(id => deleteDoc(doc(db, 'contracts', id))));
+        alert('Doublons supprimés avec succès.');
+        fetchContracts();
+      } catch (error) {
+        console.error('Error removing duplicates:', error);
+        alert('Erreur lors de la suppression des doublons.');
+      }
     }
   };
 
@@ -215,35 +234,56 @@ const AdminContracts: React.FC = () => {
             <Logo className="h-16" />
             <h1 className="text-4xl font-bold text-gray-900">Contrats</h1>
           </div>
-          <button
-            onClick={() => {
-              if (isAdding && editingId) {
-                setEditingId(null);
-                setNewContract({
-                  clientName: '',
-                  clientCNI: '',
-                  clientPhone: '',
-                  bailleurName: 'Mariama BA',
-                  propertyDesignation: '',
-                  propertyAddress: 'Cité BATA',
-                  nbNote: '',
-                  type: 'Location',
-                  price: 0,
-                  priceInWords: '',
-                  startDate: '',
-                  endDate: '',
-                  duration: '',
-                  villaNumber: '',
-                  status: 'Actif'
-                });
-              }
-              setIsAdding(!isAdding);
-            }}
-            className="bg-blue-900 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-800 transition-all shadow-lg"
-          >
-            <Plus size={20} />
-            {isAdding && editingId ? 'Annuler l\'édition' : 'Ajouter un contrat'}
-          </button>
+          <div className="flex flex-wrap gap-4">
+            <button
+              onClick={handleRemoveDuplicates}
+              className="bg-red-100 text-red-600 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-red-200 transition-all"
+            >
+              <Trash2 size={20} />
+              Supprimer Doublons
+            </button>
+            <button
+              onClick={() => {
+                if (isAdding && editingId) {
+                  setEditingId(null);
+                  setNewContract({
+                    clientName: '',
+                    clientCNI: '',
+                    clientPhone: '',
+                    bailleurName: 'Mariama BA',
+                    propertyDesignation: '',
+                    propertyAddress: 'Cité BATA',
+                    nbNote: '',
+                    type: 'Location',
+                    price: 0,
+                    priceInWords: '',
+                    startDate: '',
+                    endDate: '',
+                    duration: '',
+                    villaNumber: '',
+                    status: 'Actif'
+                  });
+                }
+                setIsAdding(!isAdding);
+              }}
+              className="bg-blue-900 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-800 transition-all shadow-lg"
+            >
+              <Plus size={20} />
+              {isAdding && editingId ? 'Annuler l\'édition' : 'Ajouter un contrat'}
+            </button>
+          </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-8 relative">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={24} />
+          <input
+            type="text"
+            placeholder="Rechercher un bailleur, un locataire, un bien..."
+            className="w-full pl-16 pr-8 py-5 bg-white border-none rounded-[2rem] shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-lg"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
         {isAdding && (
@@ -252,7 +292,7 @@ const AdminContracts: React.FC = () => {
             <form onSubmit={handleAddContract} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Client Info */}
               <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Nom du Client</label>
+                <label className="text-sm font-bold text-gray-700 ml-1">Nom du Client (Locataire)</label>
                 <input
                   type="text"
                   required
@@ -285,10 +325,17 @@ const AdminContracts: React.FC = () => {
                 <label className="text-sm font-bold text-gray-700 ml-1">Nom du Bailleur</label>
                 <input
                   type="text"
+                  required
+                  list="bailleur-names"
                   className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   value={newContract.bailleurName}
                   onChange={(e) => setNewContract({ ...newContract, bailleurName: e.target.value })}
                 />
+                <datalist id="bailleur-names">
+                  {existingBailleurNames.map(name => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
               </div>
 
               {/* Property Info */}
@@ -390,6 +437,19 @@ const AdminContracts: React.FC = () => {
                   onChange={(e) => setNewContract({ ...newContract, villaNumber: e.target.value })}
                 />
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Statut du Contrat</label>
+                <select
+                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                  value={newContract.status}
+                  onChange={(e) => setNewContract({ ...newContract, status: e.target.value })}
+                >
+                  <option value="Actif">Actif (En attente de paiement)</option>
+                  <option value="Payé">Payé</option>
+                  <option value="Terminé">Terminé</option>
+                  <option value="Annulé">Annulé</option>
+                </select>
+              </div>
               <div className="flex gap-4 md:col-span-2 lg:col-span-3">
                 <button type="submit" className="bg-blue-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all">
                   {editingId ? 'Mettre à jour' : 'Enregistrer'}
@@ -422,46 +482,8 @@ const AdminContracts: React.FC = () => {
           </div>
         )}
 
-        {/* Payment Modal */}
-        {payingContract && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl max-w-md w-full">
-              <h3 className="text-2xl font-bold mb-6">Confirmer le paiement</h3>
-              <p className="text-gray-600 mb-6">
-                Sélectionnez le mode de paiement utilisé par <strong>{payingContract.clientName}</strong> pour ce contrat.
-              </p>
-              <div className="space-y-4 mb-8">
-                <label className="text-sm font-bold text-gray-700 ml-1">Mode de Paiement</label>
-                <select
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
-                  value={selectedPaymentMethod}
-                  onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-                >
-                  <option value="">Choisir un mode...</option>
-                  {payments.map(p => <option key={p.id} value={p.id}>{p.name} ({p.type})</option>)}
-                </select>
-              </div>
-              <div className="flex gap-4">
-                <button
-                  onClick={handleMarkAsPaid}
-                  disabled={!selectedPaymentMethod}
-                  className="flex-1 bg-blue-900 text-white py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all disabled:opacity-50"
-                >
-                  Confirmer
-                </button>
-                <button
-                  onClick={() => setPayingContract(null)}
-                  className="flex-1 bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold hover:bg-gray-300 transition-all"
-                >
-                  Annuler
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {contracts.map((contract) => (
+          {filteredContracts.map((contract) => (
             <div key={contract.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between group hover:shadow-xl transition-all">
               <div>
                 <div className="flex justify-between items-start mb-6">
@@ -498,8 +520,9 @@ const AdminContracts: React.FC = () => {
                     </button>
                   </div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">{contract.clientName}</h3>
-                <p className="text-purple-600 font-bold text-sm mb-4">{contract.type} - {contract.propertyDesignation}</p>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">{contract.bailleurName}</h3>
+                <p className="text-purple-600 font-bold text-sm mb-4">Locataire: {contract.clientName}</p>
+                <p className="text-gray-500 text-xs mb-4">{contract.type} - {contract.propertyDesignation}</p>
                 <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
                   <div className="flex items-center gap-1">
                     <Clock size={14} />
@@ -520,16 +543,6 @@ const AdminContracts: React.FC = () => {
                    contract.status === 'Payé' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                   {contract.status}
                 </span>
-
-                {contract.status === 'Actif' && (
-                  <button
-                    onClick={() => setPayingContract(contract)}
-                    className="flex items-center gap-2 text-blue-900 font-bold text-sm hover:underline"
-                  >
-                    <CreditCard size={16} />
-                    Payer
-                  </button>
-                )}
               </div>
             </div>
           ))}
