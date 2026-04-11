@@ -1,0 +1,34 @@
+<svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+  <!-- Roof - Orange -->
+  <path
+    d="M20 80L100 20L180 80"
+    stroke="#F97316"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+  <path
+    d="M45 80L100 38L155 80"
+    stroke="#F97316"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+
+  <!-- House Body / C Shape - Blue -->
+  <path
+    d="M170 110C170 135 145 150 100 150C45 150 30 120 30 95C30 70 55 55 85 55"
+    stroke="#1E3A8A"
+    stroke-width="14"
+    stroke-linecap="round"
+    fill="none"
+  />
+  
+  <!-- Window - Blue -->
+  <rect x="75" y="85" width="18" height="18" fill="#1E3A8A" />
+  <rect x="97" y="85" width="18" height="18" fill="#1E3A8A" />
+  <rect x="75" y="107" width="18" height="18" fill="#1E3A8A" />
+  <rect x="97" y="107" width="18" height="18" fill="#1E3A8A" />
+</svg>

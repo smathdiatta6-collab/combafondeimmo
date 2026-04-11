@@ -28,7 +28,7 @@ const AdminReceipts: React.FC = () => {
     timbre: 0,
     periodLabel: 'un mois',
     propertyAddress: '',
-    status: 'Payé'
+    status: 'En attente'
   });
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -177,16 +177,16 @@ const AdminReceipts: React.FC = () => {
         clientName: '', 
         amount: 0, 
         amountInWords: '',
-        date: '', 
-        periodStart: '',
-        periodEnd: '',
-        contractId: '', 
+        date: new Date().toISOString().split('T')[0], 
+        periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+        periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
         paymentMethodId: 'Especes', 
         reference: '',
         prestations: 0,
         timbre: 0,
         periodLabel: 'un mois',
-        propertyAddress: ''
+        propertyAddress: '',
+        status: 'En attente'
       });
       setIsAdding(false);
       setEditingId(null);
@@ -210,7 +210,8 @@ const AdminReceipts: React.FC = () => {
       prestations: receipt.prestations || 0,
       timbre: receipt.timbre || 0,
       periodLabel: receipt.periodLabel || 'un mois',
-      propertyAddress: receipt.propertyAddress || ''
+      propertyAddress: receipt.propertyAddress || '',
+      status: receipt.status || 'En attente'
     });
     setEditingId(receipt.id);
     setIsAdding(true);
@@ -231,7 +232,8 @@ const AdminReceipts: React.FC = () => {
       prestations: receipt.prestations || 0,
       timbre: receipt.timbre || 0,
       periodLabel: receipt.periodLabel || 'un mois',
-      propertyAddress: receipt.propertyAddress || ''
+      propertyAddress: receipt.propertyAddress || '',
+      status: 'En attente'
     });
     setEditingId(null);
     setIsAdding(true);
@@ -576,7 +578,7 @@ const AdminReceipts: React.FC = () => {
                     timbre: 0,
                     periodLabel: 'un mois',
                     propertyAddress: '',
-                    status: 'Payé'
+                    status: 'En attente'
                   });
                 }} className="bg-gray-200 text-gray-700 px-8 py-4 rounded-2xl font-bold hover:bg-gray-300 transition-all">
                   Annuler
