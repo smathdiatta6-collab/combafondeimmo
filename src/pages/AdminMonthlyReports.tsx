@@ -290,15 +290,13 @@ const AdminMonthlyReports: React.FC = () => {
   );
 
   const handleGenerateReceipts = (report: any) => {
-    if (window.confirm(`Voulez-vous générer les quittances pour tous les locataires de ce bilan (${report.items.length}) ?`)) {
-      // We'll pass the data via state to the receipts page
-      navigate('/admin/quittances', { 
-        state: { 
-          fromReport: true,
-          reportData: report
-        } 
-      });
-    }
+    // We'll pass the data via state to the receipts page where the user can select items
+    navigate('/admin/quittances', { 
+      state: { 
+        fromReport: true,
+        reportData: report
+      } 
+    });
   };
 
   if (loading) return <div className="pt-32 text-center">Chargement...</div>;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { Receipt, Trash2, Plus, ArrowLeft, Printer, Download, Edit2, Copy, Search, CreditCard } from 'lucide-react';
+import { Receipt, Trash2, Plus, ArrowLeft, Printer, Download, Edit2, Copy, Search, CreditCard, X } from 'lucide-react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { generateReceiptPDF } from '../utils/pdfGenerator';
 import { numberToWordsFrench } from '../utils/numberToWords';
@@ -35,6 +35,8 @@ const AdminReceipts: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const [contractsLoaded, setContractsLoaded] = useState(false);
+  const [reportToProcess, setReportToProcess] = useState<any>(null);
+  const [selectedReportItems, setSelectedReportItems] = useState<number[]>([]);
 
   useEffect(() => {
     if (user && isAdmin) {
@@ -61,12 +63,15 @@ const AdminReceipts: React.FC = () => {
       const report = location.state.reportData;
       // Clear state immediately to prevent multiple triggers
       navigate(location.pathname, { replace: true, state: {} });
-      handleBulkReceipts(report);
+      setReportToProcess(report);
+      setSelectedReportItems(report.items.map((_: any, i: number) => i)); // Select all by default
     }
   }, [location.state, contractsLoaded]);
 
-  const handleBulkReceipts = async (report: any) => {
-    const confirmBulk = window.confirm(`Voulez-vous enregistrer automatiquement les ${report.items.length} quittances de ce bilan ?`);
+  const handleBulkReceipts = async () => {
+    if (!reportToProcess || selectedReportItems.length === 0) return;
+
+    const confirmBulk = window.confirm(`Voulez-vous enregistrer les ${selectedReportItems.length} quittances sélectionnées ?`);
     if (!confirmBulk) return;
 
     const months: { [key: string]: number } = {
@@ -76,7 +81,7 @@ const AdminReceipts: React.FC = () => {
 
     let start = '';
     let end = '';
-    const monthName = Object.keys(months).find(m => report.mois?.includes(m));
+    const monthName = Object.keys(months).find(m => reportToProcess.mois?.includes(m));
     if (monthName !== undefined) {
       const year = new Date().getFullYear();
       const monthIndex = months[monthName];
@@ -85,7 +90,9 @@ const AdminReceipts: React.FC = () => {
     }
 
     try {
-      const batchPromises = report.items.map((item: any) => {
+      const selectedItems = reportToProcess.items.filter((_: any, i: number) => selectedReportItems.includes(i));
+      
+      const batchPromises = selectedItems.map((item: any) => {
         const amount = Number(item.montantPaye) || 0;
         const clientName = `${item.prenoms || ''} ${item.nom || ''}`.trim();
         
@@ -99,7 +106,7 @@ const AdminReceipts: React.FC = () => {
           clientName: clientName,
           amount: amount,
           amountInWords: numberToWordsFrench(amount),
-          date: report.date || new Date().toISOString().split('T')[0],
+          date: reportToProcess.date || new Date().toISOString().split('T')[0],
           periodStart: start,
           periodEnd: end,
           contractId: contract?.id || '',
@@ -107,8 +114,8 @@ const AdminReceipts: React.FC = () => {
           reference: '',
           prestations: 0,
           timbre: 0,
-          periodLabel: `un mois de ${report.mois.split(' ')[0]}`,
-          propertyAddress: `Cité BATA chez ${report.chez}`,
+          periodLabel: `un mois de ${reportToProcess.mois.split(' ')[0]}`,
+          propertyAddress: `Cité BATA chez ${reportToProcess.chez}`,
           status: 'En attente',
           createdByUID: user?.uid,
           createdByName: user?.displayName || user?.email,
@@ -117,7 +124,9 @@ const AdminReceipts: React.FC = () => {
       });
 
       await Promise.all(batchPromises);
-      alert(`${report.items.length} quittances ont été générées avec succès !`);
+      alert(`${selectedItems.length} quittances ont été générées avec succès !`);
+      setReportToProcess(null);
+      setSelectedReportItems([]);
       fetchReceipts();
     } catch (error) {
       console.error('Error generating bulk receipts:', error);
@@ -411,6 +420,103 @@ const AdminReceipts: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {reportToProcess && (
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-blue-100 mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">Générer les quittances</h3>
+                <p className="text-gray-500">Sélectionnez les locataires pour le bilan de {reportToProcess.mois}</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setReportToProcess(null);
+                  setSelectedReportItems([]);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-all"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[400px] overflow-y-auto mb-8 pr-2 custom-scrollbar">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl mb-2">
+                <input
+                  type="checkbox"
+                  id="select-all"
+                  className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  checked={selectedReportItems.length === reportToProcess.items.length}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedReportItems(reportToProcess.items.map((_: any, i: number) => i));
+                    } else {
+                      setSelectedReportItems([]);
+                    }
+                  }}
+                />
+                <label htmlFor="select-all" className="font-bold text-gray-700 cursor-pointer">Tout sélectionner</label>
+              </div>
+
+              {reportToProcess.items.map((item: any, index: number) => (
+                <div 
+                  key={index} 
+                  className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                    selectedReportItems.includes(index) 
+                      ? 'border-blue-200 bg-blue-50/50' 
+                      : 'border-gray-100 bg-white hover:border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="checkbox"
+                      id={`item-${index}`}
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={selectedReportItems.includes(index)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedReportItems([...selectedReportItems, index]);
+                        } else {
+                          setSelectedReportItems(selectedReportItems.filter(i => i !== index));
+                        }
+                      }}
+                    />
+                    <label htmlFor={`item-${index}`} className="cursor-pointer">
+                      <div className="font-bold text-gray-900">{item.prenoms} {item.nom}</div>
+                      <div className="text-sm text-gray-500">{formatAmount(item.montantPaye)} FCFA</div>
+                    </label>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                      Number(item.montantPaye) > 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                    }`}>
+                      {Number(item.montantPaye) > 0 ? 'Payé' : 'Non payé'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={handleBulkReceipts}
+                disabled={selectedReportItems.length === 0}
+                className="flex-1 bg-blue-900 text-white py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Receipt size={20} />
+                Générer {selectedReportItems.length} quittance(s)
+              </button>
+              <button
+                onClick={() => {
+                  setReportToProcess(null);
+                  setSelectedReportItems([]);
+                }}
+                className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Search Bar */}
         <div className="mb-8 relative">
