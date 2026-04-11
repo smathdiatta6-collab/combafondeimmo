@@ -364,7 +364,8 @@ const AdminReceipts: React.FC = () => {
     }));
   };
 
-  const totalTenants = Array.from(new Set(contracts.map(c => c.clientName))).filter(Boolean).length;
+  const totalTenantsCount = Array.from(new Set(receipts.map(r => r.clientName))).filter(Boolean).length;
+  const totalReceiptsCount = receipts.length;
 
   if (loading) return <div className="pt-32 text-center">Chargement...</div>;
   if (!user || !isAdmin) return <Navigate to="/" />;
@@ -382,7 +383,15 @@ const AdminReceipts: React.FC = () => {
             <Logo className="h-16" />
             <div>
               <h1 className="text-4xl font-bold text-gray-900">Quittances</h1>
-              <p className="text-blue-600 font-bold mt-1">{totalTenants} Locataires au total</p>
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1 rounded-full">
+                  <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
+                  <p className="text-blue-700 font-bold text-sm">{totalTenantsCount} Locataires</p>
+                </div>
+                <div className="flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
+                  <p className="text-gray-600 font-bold text-sm">{totalReceiptsCount} Quittances</p>
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-4">
