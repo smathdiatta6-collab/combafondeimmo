@@ -439,14 +439,14 @@ export const generateMonthlyReportPDF = (report: any) => {
         fillColor: [30, 58, 138], 
         halign: 'center', 
         fontStyle: 'bold',
-        lineWidth: 0.1,
-        lineColor: [200, 200, 200]
+        lineWidth: 0.5,
+        lineColor: [0, 0, 0]
       },
       styles: { 
         fontSize: 10, 
         cellPadding: 3,
-        lineWidth: 0.1,
-        lineColor: [200, 200, 200]
+        lineWidth: 0.5,
+        lineColor: [0, 0, 0]
       },
       columnStyles: columns.reduce((acc: any, col: any, idx: number) => {
         if (col.type === 'number') {
@@ -458,9 +458,11 @@ export const generateMonthlyReportPDF = (report: any) => {
     
     const finalY = (doc as any).lastAutoTable.finalY;
     
-    doc.setFontSize(14);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(`ARRETE A LA SOMME DE : ${report.arreteSomme || '...'}`, 20, finalY + 15);
+    const arreteText = `ARRETE A LA SOMME DE : ${report.arreteSomme || '...'}`;
+    const splitArrete = doc.splitTextToSize(arreteText, 170);
+    doc.text(splitArrete, 20, finalY + 15);
     
     doc.setFont('helvetica', 'normal');
     const pageWidth = doc.internal.pageSize.getWidth();
