@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { ShieldCheck, ArrowLeft, Users, FileText, Receipt, TrendingUp, Calendar, Clock, FileBarChart } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, Users, Receipt, TrendingUp, Calendar, Clock } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import Logo from '../components/Logo';
 
@@ -108,35 +108,21 @@ const SuperAdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-            <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-3">
-              <FileText size={20} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <div className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center mb-4">
+              <Receipt size={24} />
             </div>
-            <p className="text-gray-500 text-sm font-medium">Contrats</p>
-            <h3 className="text-2xl font-bold text-gray-900">{contracts.length}</h3>
+            <p className="text-gray-500 font-medium">Paiements Enregistrés</p>
+            <h3 className="text-3xl font-bold text-gray-900">{filteredReceipts.length}</h3>
           </div>
-          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-            <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mb-3">
-              <FileBarChart size={20} />
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mb-4">
+              <TrendingUp size={24} />
             </div>
-            <p className="text-gray-500 text-sm font-medium">Bilans</p>
-            <h3 className="text-2xl font-bold text-gray-900">{reports.length}</h3>
-          </div>
-          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-            <div className="w-10 h-10 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center mb-3">
-              <Receipt size={20} />
-            </div>
-            <p className="text-gray-500 text-sm font-medium">Paiements</p>
-            <h3 className="text-2xl font-bold text-gray-900">{filteredReceipts.length}</h3>
-          </div>
-          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-            <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mb-3">
-              <TrendingUp size={20} />
-            </div>
-            <p className="text-gray-500 text-sm font-medium">Total Encaissé</p>
-            <h3 className="text-2xl font-bold text-gray-900">
-              {formatAmount(filteredReceipts.reduce((sum, r) => sum + (r.amount || 0), 0))}
+            <p className="text-gray-500 font-medium">Total Encaissé</p>
+            <h3 className="text-3xl font-bold text-gray-900">
+              {formatAmount(filteredReceipts.reduce((sum, r) => sum + (r.amount || 0), 0))} FCFA
             </h3>
           </div>
         </div>
