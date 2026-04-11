@@ -11,6 +11,7 @@ const SuperAdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
   const [receipts, setReceipts] = useState<any[]>([]);
+  const [filteredReceipts, setFilteredReceipts] = useState<any[]>([]);
   const [filter, setFilter] = useState<'day' | 'week' | 'month' | 'all'>('all');
   const [stats, setStats] = useState<any[]>([]);
 
@@ -34,51 +35,29 @@ const SuperAdminDashboard: React.FC = () => {
       setContracts(contractsList);
       setReceipts(receiptsList);
 
-      calculateStats(usersList, contractsList, receiptsList);
+      calculateStats(receiptsList);
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'all');
     }
   };
 
-  const calculateStats = (usersList: any[], contractsList: any[], receiptsList: any[]) => {
+  const calculateStats = (receiptsList: any[]) => {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const filteredContracts = contractsList.filter(c => {
-      if (filter === 'all') return true;
-      const date = new Date(c.createdAt);
-      if (filter === 'day') return date >= startOfDay;
-      if (filter === 'week') return date >= startOfWeek;
-      if (filter === 'month') return date >= startOfMonth;
-      return true;
-    });
-
-    const filteredReceipts = receiptsList.filter(r => {
+    const filtered = receiptsList.filter(r => {
       if (filter === 'all') return true;
       const date = new Date(r.createdAt);
       if (filter === 'day') return date >= startOfDay;
       if (filter === 'week') return date >= startOfWeek;
       if (filter === 'month') return date >= startOfMonth;
       return true;
-    });
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    const userStats = usersList.map(u => {
-      const userContracts = filteredContracts.filter(c => c.createdByUID === u.id);
-      const userReceipts = filteredReceipts.filter(r => r.createdByUID === u.id);
-      const totalAmount = userReceipts.reduce((sum, r) => sum + (r.amount || 0), 0);
-
-      return {
-        ...u,
-        contractCount: userContracts.length,
-        receiptCount: userReceipts.length,
-        totalAmount
-      };
-    }).filter(u => u.contractCount > 0 || u.receiptCount > 0 || u.role === 'admin');
-
-    setStats(userStats);
+    setFilteredReceipts(filtered);
   };
 
   const formatAmount = (val: number) => {
@@ -125,20 +104,13 @@ const SuperAdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
-            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4">
-              <FileText size={24} />
-            </div>
-            <p className="text-gray-500 font-medium">Contrats Créés</p>
-            <h3 className="text-3xl font-bold text-gray-900">{contracts.length}</h3>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
             <div className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center mb-4">
               <Receipt size={24} />
             </div>
             <p className="text-gray-500 font-medium">Paiements Enregistrés</p>
-            <h3 className="text-3xl font-bold text-gray-900">{receipts.length}</h3>
+            <h3 className="text-3xl font-bold text-gray-900">{filteredReceipts.length}</h3>
           </div>
           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
             <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mb-4">
@@ -146,7 +118,7 @@ const SuperAdminDashboard: React.FC = () => {
             </div>
             <p className="text-gray-500 font-medium">Total Encaissé</p>
             <h3 className="text-3xl font-bold text-gray-900">
-              {formatAmount(receipts.reduce((sum, r) => sum + (r.amount || 0), 0))} FCFA
+              {formatAmount(filteredReceipts.reduce((sum, r) => sum + (r.amount || 0), 0))} FCFA
             </h3>
           </div>
         </div>
@@ -154,8 +126,8 @@ const SuperAdminDashboard: React.FC = () => {
         <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-8 border-b border-gray-50 flex justify-between items-center">
             <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-              <Users className="text-blue-900" />
-              Activité par Utilisateur
+              <Receipt className="text-blue-900" />
+              Détails des Paiements
             </h2>
           </div>
           <div className="overflow-x-auto">
@@ -163,48 +135,49 @@ const SuperAdminDashboard: React.FC = () => {
               <thead>
                 <tr className="bg-gray-50 text-left">
                   <th className="px-8 py-4 text-sm font-bold text-gray-600">Utilisateur</th>
-                  <th className="px-8 py-4 text-sm font-bold text-gray-600">Contrats</th>
-                  <th className="px-8 py-4 text-sm font-bold text-gray-600">Paiements</th>
-                  <th className="px-8 py-4 text-sm font-bold text-gray-600">Montant Total</th>
-                  <th className="px-8 py-4 text-sm font-bold text-gray-600">Rôle</th>
+                  <th className="px-8 py-4 text-sm font-bold text-gray-600">Client</th>
+                  <th className="px-8 py-4 text-sm font-bold text-gray-600">Montant</th>
+                  <th className="px-8 py-4 text-sm font-bold text-gray-600">Date</th>
+                  <th className="px-8 py-4 text-sm font-bold text-gray-600">Heure</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {stats.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                {filteredReceipts.map((r) => (
+                  <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-blue-900 text-white rounded-full flex items-center justify-center font-bold">
-                          {u.displayName?.charAt(0) || u.email?.charAt(0)}
+                          {r.createdByName?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <p className="font-bold text-gray-900">{u.displayName || 'Utilisateur'}</p>
-                          <p className="text-xs text-gray-500">{u.email}</p>
+                          <p className="font-bold text-gray-900">{r.createdByName || 'Inconnu'}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <span className="font-bold text-gray-900">{u.contractCount}</span>
+                      <span className="font-medium text-gray-900">{r.clientName}</span>
                     </td>
                     <td className="px-8 py-6">
-                      <span className="font-bold text-gray-900">{u.receiptCount}</span>
+                      <span className="font-bold text-green-600">{formatAmount(r.amount)} FCFA</span>
                     </td>
-                    <td className="px-8 py-6">
-                      <span className="font-bold text-green-600">{formatAmount(u.totalAmount)} FCFA</span>
+                    <td className="px-8 py-6 text-gray-600">
+                      <div className="flex items-center gap-2">
+                        <Calendar size={14} />
+                        {new Date(r.createdAt).toLocaleDateString('fr-FR')}
+                      </div>
                     </td>
-                    <td className="px-8 py-6">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {u.role}
-                      </span>
+                    <td className="px-8 py-6 text-gray-600">
+                      <div className="flex items-center gap-2">
+                        <Clock size={14} />
+                        {new Date(r.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
                     </td>
                   </tr>
                 ))}
-                {stats.length === 0 && (
+                {filteredReceipts.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-8 py-12 text-center text-gray-500">
-                      Aucune activité enregistrée pour cette période.
+                      Aucun paiement enregistré pour cette période.
                     </td>
                   </tr>
                 )}
