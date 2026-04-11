@@ -7,6 +7,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { generateMonthlyReportPDF } from '../utils/pdfGenerator';
 import { numberToWordsFrench } from '../utils/numberToWords';
 import Logo from '../components/Logo';
+import Modal from '../components/Modal';
 
 interface Column {
   id: string;
@@ -251,7 +252,6 @@ const AdminMonthlyReports: React.FC = () => {
     });
     setEditingId(report.id);
     setIsAdding(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDuplicate = (report: any) => {
@@ -270,7 +270,6 @@ const AdminMonthlyReports: React.FC = () => {
     });
     setEditingId(null);
     setIsAdding(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteReport = async (id: string) => {
@@ -353,18 +352,38 @@ const AdminMonthlyReports: React.FC = () => {
           </div>
         </div>
 
-        {hasRestored && (
-          <div className="mb-6 bg-green-100 border border-green-200 text-green-700 px-6 py-4 rounded-2xl flex items-center justify-between animate-pulse">
-            <span className="font-medium">Brouillon restauré automatiquement ! Vous pouvez continuer votre saisie.</span>
-            <button onClick={() => setHasRestored(false)} className="text-green-900 hover:text-green-700">
-              <X size={20} />
-            </button>
-          </div>
-        )}
+        <Modal
+          isOpen={isAdding}
+          onClose={() => {
+            setIsAdding(false);
+            setEditingId(null);
+            setNewReport({
+              chez: '',
+              mois: `${months[new Date().getMonth()]} ${new Date().getFullYear()}`,
+              columns: defaultColumns,
+              items: [],
+              totalCommission: 0,
+              totalRemettre: 0,
+              commissionPercentage: 10,
+              arreteSomme: '',
+              date: new Date().toISOString().split('T')[0],
+              villaNumber: '',
+              customRows: []
+            });
+            localStorage.removeItem('draft_monthly_report');
+          }}
+          title={editingId ? 'Modifier le Bilan' : 'Nouveau Bilan Mensuel'}
+        >
+          <div className="space-y-8">
+            {hasRestored && (
+              <div className="bg-green-50 text-green-700 px-6 py-4 rounded-2xl flex items-center justify-between animate-pulse">
+                <span className="font-medium">Brouillon restauré automatiquement ! Vous pouvez continuer votre saisie.</span>
+                <button onClick={() => setHasRestored(false)} className="text-green-900 hover:text-green-700">
+                  <X size={20} />
+                </button>
+              </div>
+            )}
 
-        {isAdding && (
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 mb-12">
-            <h3 className="text-2xl font-bold mb-6">{editingId ? 'Modifier le Bilan' : 'Nouveau Bilan Mensuel'}</h3>
             <form onSubmit={handleAddReport} className="space-y-8">
               {/* Column Management */}
               <div className="mb-8">
@@ -786,7 +805,7 @@ const AdminMonthlyReports: React.FC = () => {
               </div>
             </form>
           </div>
-        )}
+        </Modal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredReports.map((report) => (

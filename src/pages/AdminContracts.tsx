@@ -6,6 +6,7 @@ import { FileText, Trash2, Plus, ArrowLeft, CheckCircle2, XCircle, Clock, Credit
 import { Link, Navigate } from 'react-router-dom';
 import { generateContractPDF } from '../utils/pdfGenerator';
 import Logo from '../components/Logo';
+import Modal from '../components/Modal';
 
 const AdminContracts: React.FC = () => {
   const { user, isAdmin, loading } = useFirebase();
@@ -142,7 +143,6 @@ const AdminContracts: React.FC = () => {
     });
     setEditingId(contract.id);
     setIsAdding(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteContract = async (id: string) => {
@@ -176,7 +176,6 @@ const AdminContracts: React.FC = () => {
     });
     setEditingId(null);
     setIsAdding(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const filteredContracts = contracts.filter(contract => 
@@ -286,201 +285,222 @@ const AdminContracts: React.FC = () => {
           />
         </div>
 
-        {isAdding && (
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 mb-12">
-            <h3 className="text-2xl font-bold mb-6">{editingId ? 'Modifier le Contrat' : 'Nouveau Contrat'}</h3>
-            <form onSubmit={handleAddContract} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Client Info */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Nom du Client (Locataire)</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.clientName}
-                  onChange={(e) => setNewContract({ ...newContract, clientName: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">CNI du Client</label>
-                <input
-                  type="text"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.clientCNI}
-                  onChange={(e) => setNewContract({ ...newContract, clientCNI: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Téléphone du Client</label>
-                <input
-                  type="text"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.clientPhone}
-                  onChange={(e) => setNewContract({ ...newContract, clientPhone: e.target.value })}
-                />
-              </div>
+        <Modal
+          isOpen={isAdding}
+          onClose={() => {
+            setIsAdding(false);
+            setEditingId(null);
+            setNewContract({
+              clientName: '',
+              clientCNI: '',
+              clientPhone: '',
+              bailleurName: 'Mariama BA',
+              propertyDesignation: '',
+              propertyAddress: 'Cité BATA',
+              nbNote: '',
+              type: 'Location',
+              price: 0,
+              priceInWords: '',
+              startDate: '',
+              endDate: '',
+              duration: '',
+              villaNumber: '',
+              status: 'Actif'
+            });
+          }}
+          title={editingId ? 'Modifier le Contrat' : 'Nouveau Contrat'}
+        >
+          <form onSubmit={handleAddContract} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Client Info */}
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Nom du Client (Locataire)</label>
+              <input
+                type="text"
+                required
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.clientName}
+                onChange={(e) => setNewContract({ ...newContract, clientName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">CNI du Client</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.clientCNI}
+                onChange={(e) => setNewContract({ ...newContract, clientCNI: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Téléphone du Client</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.clientPhone}
+                onChange={(e) => setNewContract({ ...newContract, clientPhone: e.target.value })}
+              />
+            </div>
 
-              {/* Bailleur Info */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Nom du Bailleur</label>
-                <input
-                  type="text"
-                  required
-                  list="bailleur-names"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.bailleurName}
-                  onChange={(e) => setNewContract({ ...newContract, bailleurName: e.target.value })}
-                />
-                <datalist id="bailleur-names">
-                  {existingBailleurNames.map(name => (
-                    <option key={name} value={name} />
-                  ))}
-                </datalist>
-              </div>
+            {/* Bailleur Info */}
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Nom du Bailleur</label>
+              <input
+                type="text"
+                required
+                list="bailleur-names"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.bailleurName}
+                onChange={(e) => setNewContract({ ...newContract, bailleurName: e.target.value })}
+              />
+              <datalist id="bailleur-names">
+                {existingBailleurNames.map(name => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            </div>
 
-              {/* Property Info */}
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Désignation de l'appartement</label>
-                <textarea
-                  required
-                  placeholder="ex: 2 Chambres + Salon + Cuisine + Toilette"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all min-h-[100px] resize-none"
-                  value={newContract.propertyDesignation}
-                  onChange={(e) => setNewContract({ ...newContract, propertyDesignation: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Adresse du Bien</label>
-                <input
-                  type="text"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.propertyAddress}
-                  onChange={(e) => setNewContract({ ...newContract, propertyAddress: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Note NB</label>
-                <input
-                  type="text"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.nbNote}
-                  onChange={(e) => setNewContract({ ...newContract, nbNote: e.target.value })}
-                />
-              </div>
+            {/* Property Info */}
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Désignation de l'appartement</label>
+              <textarea
+                required
+                placeholder="ex: 2 Chambres + Salon + Cuisine + Toilette"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all min-h-[100px] resize-none"
+                value={newContract.propertyDesignation}
+                onChange={(e) => setNewContract({ ...newContract, propertyDesignation: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Adresse du Bien</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.propertyAddress}
+                onChange={(e) => setNewContract({ ...newContract, propertyAddress: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Note NB</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.nbNote}
+                onChange={(e) => setNewContract({ ...newContract, nbNote: e.target.value })}
+              />
+            </div>
 
-              {/* Contract Details */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Type</label>
-                <select
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
-                  value={newContract.type}
-                  onChange={(e) => setNewContract({ ...newContract, type: e.target.value })}
-                >
-                  <option value="Location">Location</option>
-                  <option value="Vente">Vente</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Prix (FCFA)</label>
-                <input
-                  type="number"
-                  required
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.price}
-                  onChange={(e) => setNewContract({ ...newContract, price: parseInt(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Prix en toutes lettres</label>
-                <input
-                  type="text"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.priceInWords}
-                  onChange={(e) => setNewContract({ ...newContract, priceInWords: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Date de début</label>
-                <input
-                  type="date"
-                  required
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.startDate}
-                  onChange={(e) => setNewContract({ ...newContract, startDate: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Date de fin</label>
-                <input
-                  type="text"
-                  placeholder="ex: Décembre 2024"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.endDate}
-                  onChange={(e) => setNewContract({ ...newContract, endDate: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Durée (ex: 1 an)</label>
-                <input
-                  type="text"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.duration}
-                  onChange={(e) => setNewContract({ ...newContract, duration: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Villa N° (Footer)</label>
-                <input
-                  type="text"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newContract.villaNumber}
-                  onChange={(e) => setNewContract({ ...newContract, villaNumber: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Statut du Contrat</label>
-                <select
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
-                  value={newContract.status}
-                  onChange={(e) => setNewContract({ ...newContract, status: e.target.value })}
-                >
-                  <option value="Actif">Actif (En attente de paiement)</option>
-                  <option value="Payé">Payé</option>
-                  <option value="Terminé">Terminé</option>
-                  <option value="Annulé">Annulé</option>
-                </select>
-              </div>
-              <div className="flex gap-4 md:col-span-2 lg:col-span-3">
-                <button type="submit" className="bg-blue-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all">
-                  {editingId ? 'Mettre à jour' : 'Enregistrer'}
-                </button>
-                <button type="button" onClick={() => {
-                  setIsAdding(false);
-                  setEditingId(null);
-                  setNewContract({
-                    clientName: '',
-                    clientCNI: '',
-                    clientPhone: '',
-                    bailleurName: 'Mariama BA',
-                    propertyDesignation: '',
-                    propertyAddress: 'Cité BATA',
-                    nbNote: '',
-                    type: 'Location',
-                    price: 0,
-                    priceInWords: '',
-                    startDate: '',
-                    endDate: '',
-                    duration: '',
-                    villaNumber: '',
-                    status: 'Actif'
-                  });
-                }} className="bg-gray-200 text-gray-700 px-8 py-4 rounded-2xl font-bold hover:bg-gray-300 transition-all">
-                  Annuler
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+            {/* Contract Details */}
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Type</label>
+              <select
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                value={newContract.type}
+                onChange={(e) => setNewContract({ ...newContract, type: e.target.value })}
+              >
+                <option value="Location">Location</option>
+                <option value="Vente">Vente</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Prix (FCFA)</label>
+              <input
+                type="number"
+                required
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.price}
+                onChange={(e) => setNewContract({ ...newContract, price: parseInt(e.target.value) })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Prix en toutes lettres</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.priceInWords}
+                onChange={(e) => setNewContract({ ...newContract, priceInWords: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Date de début</label>
+              <input
+                type="date"
+                required
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.startDate}
+                onChange={(e) => setNewContract({ ...newContract, startDate: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Date de fin</label>
+              <input
+                type="text"
+                placeholder="ex: Décembre 2024"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.endDate}
+                onChange={(e) => setNewContract({ ...newContract, endDate: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Durée (ex: 1 an)</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.duration}
+                onChange={(e) => setNewContract({ ...newContract, duration: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Villa N° (Footer)</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newContract.villaNumber}
+                onChange={(e) => setNewContract({ ...newContract, villaNumber: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Statut du Contrat</label>
+              <select
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                value={newContract.status}
+                onChange={(e) => setNewContract({ ...newContract, status: e.target.value })}
+              >
+                <option value="Actif">Actif (En attente de paiement)</option>
+                <option value="Payé">Payé</option>
+                <option value="Terminé">Terminé</option>
+                <option value="Annulé">Annulé</option>
+              </select>
+            </div>
+            <div className="flex gap-4 md:col-span-2 lg:col-span-3 pt-4">
+              <button type="submit" className="flex-1 bg-blue-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all shadow-lg">
+                {editingId ? 'Mettre à jour' : 'Enregistrer'}
+              </button>
+              <button type="button" onClick={() => {
+                setIsAdding(false);
+                setEditingId(null);
+                setNewContract({
+                  clientName: '',
+                  clientCNI: '',
+                  clientPhone: '',
+                  bailleurName: 'Mariama BA',
+                  propertyDesignation: '',
+                  propertyAddress: 'Cité BATA',
+                  nbNote: '',
+                  type: 'Location',
+                  price: 0,
+                  priceInWords: '',
+                  startDate: '',
+                  endDate: '',
+                  duration: '',
+                  villaNumber: '',
+                  status: 'Actif'
+                });
+              }} className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all">
+                Annuler
+              </button>
+            </div>
+          </form>
+        </Modal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {filteredContracts.map((contract) => (

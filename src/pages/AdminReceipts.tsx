@@ -7,6 +7,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { generateReceiptPDF } from '../utils/pdfGenerator';
 import { numberToWordsFrench } from '../utils/numberToWords';
 import Logo from '../components/Logo';
+import Modal from '../components/Modal';
 
 const AdminReceipts: React.FC = () => {
   const { user, isAdmin, loading } = useFirebase();
@@ -224,7 +225,6 @@ const AdminReceipts: React.FC = () => {
     });
     setEditingId(receipt.id);
     setIsAdding(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDuplicate = (receipt: any) => {
@@ -246,7 +246,6 @@ const AdminReceipts: React.FC = () => {
     });
     setEditingId(null);
     setIsAdding(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteReceipt = async (id: string) => {
@@ -530,169 +529,190 @@ const AdminReceipts: React.FC = () => {
           />
         </div>
 
-        {isAdding && (
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 mb-12">
-            <h3 className="text-2xl font-bold mb-6">{editingId ? 'Modifier la Quittance' : 'Nouvelle Quittance'}</h3>
-            <form onSubmit={handleAddReceipt} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Nom du Client (Locataire)</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newReceipt.clientName}
-                  onChange={(e) => setNewReceipt({ ...newReceipt, clientName: e.target.value })}
-                />
-              </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700 ml-1">Montant (FCFA)</label>
-                    <input
-                      type="number"
-                      required
-                      className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      value={newReceipt.amount}
-                      onChange={(e) => {
-                        const amt = parseInt(e.target.value) || 0;
-                        setNewReceipt({ 
-                          ...newReceipt, 
-                          amount: amt,
-                          amountInWords: numberToWordsFrench(amt)
-                        });
-                      }}
-                    />
-                  </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Montant en lettres (Généré automatiquement)</label>
-                <input
-                  type="text"
-                  readOnly
-                  className="w-full px-5 py-4 bg-gray-100 border-none rounded-2xl focus:ring-0 outline-none cursor-not-allowed font-bold text-gray-700"
-                  value={newReceipt.amountInWords}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Période du</label>
-                <input
-                  type="date"
-                  required
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newReceipt.periodStart}
-                  onChange={(e) => setNewReceipt({ ...newReceipt, periodStart: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Période au</label>
-                <input
-                  type="date"
-                  required
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newReceipt.periodEnd}
-                  onChange={(e) => setNewReceipt({ ...newReceipt, periodEnd: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Maison située à (Adresse)</label>
-                <input
-                  type="text"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  placeholder="Adresse de la maison"
-                  value={newReceipt.propertyAddress}
-                  onChange={(e) => setNewReceipt({ ...newReceipt, propertyAddress: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Période (Mois)</label>
-                <select
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
-                  value={newReceipt.periodLabel}
-                  onChange={(e) => handlePeriodLabelChange(e.target.value)}
-                >
-                  <option value="un mois">un mois</option>
-                  <option value="un mois de Janvier">un mois de Janvier</option>
-                  <option value="un mois de Février">un mois de Février</option>
-                  <option value="un mois de Mars">un mois de Mars</option>
-                  <option value="un mois de Avril">un mois de Avril</option>
-                  <option value="un mois de Mai">un mois de Mai</option>
-                  <option value="un mois de Juin">un mois de Juin</option>
-                  <option value="un mois de Juillet">un mois de Juillet</option>
-                  <option value="un mois de Août">un mois de Août</option>
-                  <option value="un mois de Septembre">un mois de Septembre</option>
-                  <option value="un mois de Octobre">un mois de Octobre</option>
-                  <option value="un mois de Novembre">un mois de Novembre</option>
-                  <option value="un mois de Décembre">un mois de Décembre</option>
-                  <option value="un trimestre">un trimestre</option>
-                  <option value="un semestre">un semestre</option>
-                  <option value="une année">une année</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Prestations (FCFA)</label>
-                <input
-                  type="number"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newReceipt.prestations}
-                  onChange={(e) => setNewReceipt({ ...newReceipt, prestations: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Timbre (FCFA)</label>
-                <input
-                  type="number"
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newReceipt.timbre}
-                  onChange={(e) => setNewReceipt({ ...newReceipt, timbre: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Date du Paiement</label>
-                <input
-                  type="date"
-                  required
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={newReceipt.date}
-                  onChange={(e) => setNewReceipt({ ...newReceipt, date: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Statut de la Quittance</label>
-                <select
-                  className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
-                  value={newReceipt.status}
-                  onChange={(e) => setNewReceipt({ ...newReceipt, status: e.target.value })}
-                >
-                  <option value="Payé">Payé (Déjà réglé)</option>
-                  <option value="En attente">En attente (À payer plus tard)</option>
-                </select>
-              </div>
-              <div className="flex gap-4 md:col-span-2">
-                <button type="submit" className="bg-blue-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all">
-                  {editingId ? 'Mettre à jour' : 'Générer'}
-                </button>
-                <button type="button" onClick={() => {
-                  setIsAdding(false);
-                  setEditingId(null);
+        <Modal
+          isOpen={isAdding}
+          onClose={() => {
+            setIsAdding(false);
+            setEditingId(null);
+            setNewReceipt({ 
+              clientName: '', 
+              amount: 0, 
+              amountInWords: '',
+              date: new Date().toISOString().split('T')[0], 
+              periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+              periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+              contractId: '', 
+              paymentMethodId: 'Especes', 
+              reference: '',
+              prestations: 0,
+              timbre: 0,
+              periodLabel: 'un mois',
+              propertyAddress: '',
+              status: 'En attente'
+            });
+          }}
+          title={editingId ? 'Modifier la Quittance' : 'Nouvelle Quittance'}
+        >
+          <form onSubmit={handleAddReceipt} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Nom du Client (Locataire)</label>
+              <input
+                type="text"
+                required
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newReceipt.clientName}
+                onChange={(e) => setNewReceipt({ ...newReceipt, clientName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Montant (FCFA)</label>
+              <input
+                type="number"
+                required
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newReceipt.amount}
+                onChange={(e) => {
+                  const amt = parseInt(e.target.value) || 0;
                   setNewReceipt({ 
-                    clientName: '', 
-                    amount: 0, 
-                    amountInWords: '',
-                    date: new Date().toISOString().split('T')[0], 
-                    periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-                    periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
-                    paymentMethodId: 'Especes', 
-                    reference: '',
-                    prestations: 0,
-                    timbre: 0,
-                    periodLabel: 'un mois',
-                    propertyAddress: '',
-                    status: 'En attente'
+                    ...newReceipt, 
+                    amount: amt,
+                    amountInWords: numberToWordsFrench(amt)
                   });
-                }} className="bg-gray-200 text-gray-700 px-8 py-4 rounded-2xl font-bold hover:bg-gray-300 transition-all">
-                  Annuler
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+                }}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Montant en lettres (Généré automatiquement)</label>
+              <input
+                type="text"
+                readOnly
+                className="w-full px-5 py-4 bg-gray-100 border-none rounded-2xl focus:ring-0 outline-none cursor-not-allowed font-bold text-gray-700"
+                value={newReceipt.amountInWords}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Période du</label>
+              <input
+                type="date"
+                required
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newReceipt.periodStart}
+                onChange={(e) => setNewReceipt({ ...newReceipt, periodStart: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Période au</label>
+              <input
+                type="date"
+                required
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newReceipt.periodEnd}
+                onChange={(e) => setNewReceipt({ ...newReceipt, periodEnd: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Maison située à (Adresse)</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                placeholder="Adresse de la maison"
+                value={newReceipt.propertyAddress}
+                onChange={(e) => setNewReceipt({ ...newReceipt, propertyAddress: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Période (Mois)</label>
+              <select
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                value={newReceipt.periodLabel}
+                onChange={(e) => handlePeriodLabelChange(e.target.value)}
+              >
+                <option value="un mois">un mois</option>
+                <option value="un mois de Janvier">un mois de Janvier</option>
+                <option value="un mois de Février">un mois de Février</option>
+                <option value="un mois de Mars">un mois de Mars</option>
+                <option value="un mois de Avril">un mois de Avril</option>
+                <option value="un mois de Mai">un mois de Mai</option>
+                <option value="un mois de Juin">un mois de Juin</option>
+                <option value="un mois de Juillet">un mois de Juillet</option>
+                <option value="un mois de Août">un mois de Août</option>
+                <option value="un mois de Septembre">un mois de Septembre</option>
+                <option value="un mois de Octobre">un mois de Octobre</option>
+                <option value="un mois de Novembre">un mois de Novembre</option>
+                <option value="un mois de Décembre">un mois de Décembre</option>
+                <option value="un trimestre">un trimestre</option>
+                <option value="un semestre">un semestre</option>
+                <option value="une année">une année</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Prestations (FCFA)</label>
+              <input
+                type="number"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newReceipt.prestations}
+                onChange={(e) => setNewReceipt({ ...newReceipt, prestations: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Timbre (FCFA)</label>
+              <input
+                type="number"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newReceipt.timbre}
+                onChange={(e) => setNewReceipt({ ...newReceipt, timbre: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Date du Paiement</label>
+              <input
+                type="date"
+                required
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newReceipt.date}
+                onChange={(e) => setNewReceipt({ ...newReceipt, date: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Statut de la Quittance</label>
+              <select
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                value={newReceipt.status}
+                onChange={(e) => setNewReceipt({ ...newReceipt, status: e.target.value })}
+              >
+                <option value="Payé">Payé (Déjà réglé)</option>
+                <option value="En attente">En attente (À payer plus tard)</option>
+              </select>
+            </div>
+            <div className="flex gap-4 md:col-span-2 pt-4">
+              <button type="submit" className="flex-1 bg-blue-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all shadow-lg">
+                {editingId ? 'Mettre à jour' : 'Générer'}
+              </button>
+              <button type="button" onClick={() => {
+                setIsAdding(false);
+                setEditingId(null);
+                setNewReceipt({ 
+                  clientName: '', 
+                  amount: 0, 
+                  amountInWords: '',
+                  date: new Date().toISOString().split('T')[0], 
+                  periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+                  periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+                  contractId: '', 
+                  paymentMethodId: 'Especes', 
+                  reference: '',
+                  prestations: 0,
+                  timbre: 0,
+                  periodLabel: 'un mois',
+                  propertyAddress: '',
+                  status: 'En attente'
+                });
+              }} className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all">
+                Annuler
+              </button>
+            </div>
+          </form>
+        </Modal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredReceipts.map((receipt) => (
