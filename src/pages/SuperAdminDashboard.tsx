@@ -27,7 +27,7 @@ const SuperAdminDashboard: React.FC = () => {
       const usersSnap = await getDocs(collection(db, 'users'));
       const contractsSnap = await getDocs(collection(db, 'contracts'));
       const receiptsSnap = await getDocs(collection(db, 'receipts'));
-      const reportsSnap = await getDocs(collection(db, 'monthly_reports'));
+      const reportsSnap = await getDocs(collection(db, 'monthlyReports'));
 
       const usersList = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const contractsList = contractsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));

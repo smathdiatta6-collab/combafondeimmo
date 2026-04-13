@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification for admin users",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the notification" },
+        "message": { "type": "string", "description": "The message of the notification" },
+        "type": { "type": "string", "enum": ["message", "payment", "contract", "system"], "description": "The type of notification" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the notification was created" },
+        "read": { "type": "boolean", "description": "Whether the notification has been read" },
+        "link": { "type": "string", "description": "Optional link to navigate to" }
+      },
+      "required": ["title", "message", "type", "createdAt", "read"]
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "A contact message from a user",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["unread", "read"] }
+      },
+      "required": ["name", "email", "subject", "message", "createdAt", "status"]
+    }
+  },
+  "firestore": {
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Collection of notifications for admins"
+    },
+    "/contacts/{contactId}": {
+      "schema": "Contact",
+      "description": "Collection of contact messages"
+    }
+  }
+}

@@ -8,6 +8,7 @@ import { generateReceiptPDF } from '../utils/pdfGenerator';
 import { numberToWordsFrench } from '../utils/numberToWords';
 import Logo from '../components/Logo';
 import Modal from '../components/Modal';
+import { createNotification } from '../services/NotificationService';
 
 const AdminReceipts: React.FC = () => {
   const { user, isAdmin, loading } = useFirebase();
@@ -125,6 +126,14 @@ const AdminReceipts: React.FC = () => {
       });
 
       await Promise.all(batchPromises);
+
+      await createNotification({
+        title: 'Quittances groupées',
+        message: `${selectedItems.length} quittances ont été générées pour le bilan de ${reportToProcess.mois}`,
+        type: 'payment',
+        link: '/admin/quittances'
+      });
+
       alert(`${selectedItems.length} quittances ont été générées avec succès !`);
       setReportToProcess(null);
       setSelectedReportItems([]);
@@ -181,6 +190,14 @@ const AdminReceipts: React.FC = () => {
           createdByName: user?.displayName || user?.email,
           createdAt: new Date().toISOString()
         });
+
+        await createNotification({
+          title: 'Nouvelle quittance',
+          message: `Une quittance de ${formatAmount(newReceipt.amount)} FCFA a été générée pour ${newReceipt.clientName}`,
+          type: 'payment',
+          link: '/admin/quittances'
+        });
+
         alert('Quittance enregistrée avec succès !');
       }
       setNewReceipt({ 
@@ -319,6 +336,13 @@ const AdminReceipts: React.FC = () => {
       if (receipt.contractId) {
         await updateDoc(doc(db, 'contracts', receipt.contractId), { status: 'Payé' });
       }
+
+      await createNotification({
+        title: 'Paiement reçu',
+        message: `Paiement de ${formatAmount(receipt.amount)} FCFA reçu pour ${receipt.clientName}`,
+        type: 'payment',
+        link: '/admin/quittances'
+      });
 
       alert('Quittance marquée comme payée !');
       fetchReceipts();

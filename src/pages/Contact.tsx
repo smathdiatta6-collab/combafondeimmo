@@ -3,6 +3,7 @@ import { Mail, Phone, MapPin, Send, MessageCircle } from 'lucide-react';
 import React, { useState } from 'react';
 import { db, OperationType, handleFirestoreError } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
+import { createNotification } from '../services/NotificationService';
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -23,6 +24,14 @@ export default function Contact() {
         createdAt: new Date().toISOString(),
         status: 'unread'
       });
+
+      await createNotification({
+        title: 'Nouveau message',
+        message: `${formData.name} a envoyé un message : ${formData.subject}`,
+        type: 'message',
+        link: '/admin/messages'
+      });
+
       alert('Merci ! Votre message a été envoyé.');
       setFormData({ name: '', email: '', subject: '', message: '' });
     } catch (error) {

@@ -7,6 +7,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { generateContractPDF } from '../utils/pdfGenerator';
 import Logo from '../components/Logo';
 import Modal from '../components/Modal';
+import { createNotification } from '../services/NotificationService';
 
 const AdminContracts: React.FC = () => {
   const { user, isAdmin, loading } = useFirebase();
@@ -96,6 +97,14 @@ const AdminContracts: React.FC = () => {
           createdByName: user?.displayName || user?.email,
           createdAt: new Date().toISOString()
         });
+
+        await createNotification({
+          title: 'Nouveau contrat',
+          message: `Un nouveau contrat de ${newContract.type} a été créé pour ${newContract.clientName} (Bailleur: ${newContract.bailleurName})`,
+          type: 'contract',
+          link: '/admin/contrats'
+        });
+
         alert('Contrat enregistré avec succès !');
       }
       setNewContract({

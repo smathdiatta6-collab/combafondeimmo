@@ -138,6 +138,10 @@ service cloud.firestore {
     match /monthlyReports/{reportId} {
       allow read, write: if isAdmin();
     }
+
+    match /notifications/{notificationId} {
+      allow read, write: if isAdmin();
+    }
     
     function isValidContact(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&

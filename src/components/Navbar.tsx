@@ -4,6 +4,7 @@ import { Home, Building2, Briefcase, Mail, User, ShieldCheck, Menu, X } from 'lu
 import { useFirebase } from '../contexts/FirebaseContext';
 import { motion, AnimatePresence } from 'motion/react';
 import Logo from './Logo';
+import NotificationBell from './NotificationBell';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -47,17 +48,20 @@ export default function Navbar() {
             ))}
 
             {isAdmin && (
-              <Link
-                to="/admin"
-                className={`flex items-center gap-2 font-bold transition-colors ${
-                  location.pathname.startsWith('/admin')
-                    ? 'text-purple-600'
-                    : 'text-gray-600 hover:text-purple-600'
-                }`}
-              >
-                <ShieldCheck size={18} />
-                Admin
-              </Link>
+              <div className="flex items-center gap-4">
+                <NotificationBell />
+                <Link
+                  to="/admin"
+                  className={`flex items-center gap-2 font-bold transition-colors ${
+                    location.pathname.startsWith('/admin')
+                      ? 'text-purple-600'
+                      : 'text-gray-600 hover:text-purple-600'
+                  }`}
+                >
+                  <ShieldCheck size={18} />
+                  Admin
+                </Link>
+              </div>
             )}
 
             {!user ? (
@@ -116,17 +120,23 @@ export default function Navbar() {
               ))}
 
               {isAdmin && (
-                <Link
-                  to="/admin"
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${
-                    location.pathname.startsWith('/admin')
-                      ? 'bg-purple-50 text-purple-600'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-purple-600'
-                  }`}
-                >
-                  <ShieldCheck size={20} />
-                  Admin
-                </Link>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between px-4 py-2 bg-gray-50 rounded-xl">
+                    <span className="text-sm font-bold text-gray-600">Notifications</span>
+                    <NotificationBell />
+                  </div>
+                  <Link
+                    to="/admin"
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${
+                      location.pathname.startsWith('/admin')
+                        ? 'bg-purple-50 text-purple-600'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-purple-600'
+                    }`}
+                  >
+                    <ShieldCheck size={20} />
+                    Admin
+                  </Link>
+                </div>
               )}
 
               {!user && (
