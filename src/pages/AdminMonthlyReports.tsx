@@ -27,6 +27,7 @@ const AdminMonthlyReports: React.FC = () => {
   const [showColumnManager, setShowColumnManager] = useState(false);
   const [showCustomRowForm, setShowCustomRowForm] = useState(false);
   const [customRowData, setCustomRowData] = useState({ label: '', value: 0 });
+  const [editingCustomRowIndex, setEditingCustomRowIndex] = useState<number | null>(null);
   
   const defaultColumns: Column[] = [
     { id: 'prenoms', label: 'Prénoms', type: 'text' },
@@ -169,18 +170,37 @@ const AdminMonthlyReports: React.FC = () => {
       return;
     }
     
+    const updatedCustomRows = [...(newReport.customRows || [])];
+    if (editingCustomRowIndex !== null) {
+      updatedCustomRows[editingCustomRowIndex] = { ...customRowData };
+    } else {
+      updatedCustomRows.push({ ...customRowData });
+    }
+
     setNewReport({
       ...newReport,
-      customRows: [...(newReport.customRows || []), { ...customRowData }]
+      customRows: updatedCustomRows
     });
     setCustomRowData({ label: '', value: 0 });
+    setEditingCustomRowIndex(null);
     setShowCustomRowForm(false);
+  };
+
+  const handleEditCustomRow = (index: number) => {
+    const row = newReport.customRows[index];
+    setCustomRowData({ label: row.label, value: row.value });
+    setEditingCustomRowIndex(index);
+    setShowCustomRowForm(true);
   };
 
   const handleRemoveCustomRow = (index: number) => {
     const updated = [...(newReport.customRows || [])];
     updated.splice(index, 1);
     setNewReport({ ...newReport, customRows: updated });
+    if (editingCustomRowIndex === index) {
+      setEditingCustomRowIndex(null);
+      setCustomRowData({ label: '', value: 0 });
+    }
   };
 
   const handleAddReport = async (e: React.FormEvent) => {
@@ -357,6 +377,8 @@ const AdminMonthlyReports: React.FC = () => {
           onClose={() => {
             setIsAdding(false);
             setEditingId(null);
+            setEditingCustomRowIndex(null);
+            setCustomRowData({ label: '', value: 0 });
             setNewReport({
               chez: '',
               mois: `${months[new Date().getMonth()]} ${new Date().getFullYear()}`,
@@ -708,7 +730,7 @@ const AdminMonthlyReports: React.FC = () => {
               {showCustomRowForm && (
                 <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100 animate-in fade-in slide-in-from-top-4 duration-300 mb-6">
                   <h4 className="font-bold mb-4 text-orange-800 flex items-center gap-2">
-                    <Settings size={18} /> Nouvelle ligne personnalisée
+                    <Settings size={18} /> {editingCustomRowIndex !== null ? 'Modifier la ligne' : 'Nouvelle ligne personnalisée'}
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
@@ -736,7 +758,7 @@ const AdminMonthlyReports: React.FC = () => {
                         onClick={handleAddCustomRow}
                         className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-all shadow-md"
                       >
-                        Ajouter au résumé
+                        {editingCustomRowIndex !== null ? 'Mettre à jour' : 'Ajouter au résumé'}
                       </button>
                     </div>
                   </div>
@@ -754,13 +776,24 @@ const AdminMonthlyReports: React.FC = () => {
                           <span className="font-bold text-gray-700">{row.label}</span>
                           <span className="text-blue-900 font-mono font-bold">{formatAmount(row.value)} FCFA</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCustomRow(idx)}
-                          className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-xl transition-all"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditCustomRow(idx)}
+                            className="text-orange-400 hover:text-orange-600 p-2 hover:bg-orange-50 rounded-xl transition-all"
+                            title="Modifier"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomRow(idx)}
+                            className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-xl transition-all"
+                            title="Supprimer"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -786,6 +819,8 @@ const AdminMonthlyReports: React.FC = () => {
                   if (window.confirm('Voulez-vous vraiment annuler ? Toutes les données non enregistrées seront perdues.')) {
                     setIsAdding(false);
                     setEditingId(null);
+                    setEditingCustomRowIndex(null);
+                    setCustomRowData({ label: '', value: 0 });
                     localStorage.removeItem('draft_monthly_report');
                     setNewReport({
                       chez: '',

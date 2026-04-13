@@ -28,7 +28,9 @@ const AdminMessages: React.FC = () => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ContactMessage));
       setMessages(data);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'contacts');
+      if (error.code !== 'permission-denied') {
+        handleFirestoreError(error, OperationType.LIST, 'contacts');
+      }
     });
 
     return () => unsubscribe();

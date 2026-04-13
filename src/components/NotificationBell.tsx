@@ -5,13 +5,18 @@ import { db } from '../firebase';
 import { Notification } from '../services/NotificationService';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
+import { useFirebase } from '../contexts/FirebaseContext';
+import { handleFirestoreError, OperationType } from '../firebase';
 
 const NotificationBell: React.FC = () => {
+  const { isAdmin } = useFirebase();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
+    if (!isAdmin) return;
+
     const q = query(
       collection(db, 'notifications'),
       orderBy('createdAt', 'desc'),
@@ -22,10 +27,15 @@ const NotificationBell: React.FC = () => {
       const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Notification[];
       setNotifications(notifs);
       setUnreadCount(notifs.filter(n => !n.read).length);
+    }, (error) => {
+      // Only log if it's not a permission error during logout/login transition
+      if (error.code !== 'permission-denied') {
+        handleFirestoreError(error, OperationType.LIST, 'notifications');
+      }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isAdmin]);
 
   const markAsRead = async (id: string) => {
     try {

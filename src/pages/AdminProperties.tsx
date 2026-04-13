@@ -38,7 +38,9 @@ const AdminProperties: React.FC = () => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Property));
       setProperties(data);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'properties');
+      if (error.code !== 'permission-denied') {
+        handleFirestoreError(error, OperationType.LIST, 'properties');
+      }
     });
 
     return () => unsubscribe();

@@ -87,8 +87,17 @@ const SuperAdminDashboard: React.FC = () => {
               <p className="text-gray-600">Suivi des performances de l'équipe</p>
             </div>
           </div>
-          
-          <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100">
+
+          <div className="flex items-center gap-4">
+            <Link 
+              to="/admin/users"
+              className="bg-blue-900 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-800 transition-all shadow-lg"
+            >
+              <Users size={20} />
+              Gérer les Utilisateurs
+            </Link>
+            
+            <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100">
             {[
               { id: 'all', label: 'Tout' },
               { id: 'day', label: 'Jour' },
@@ -107,6 +116,7 @@ const SuperAdminDashboard: React.FC = () => {
             ))}
           </div>
         </div>
+      </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
