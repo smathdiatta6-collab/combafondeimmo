@@ -32,41 +32,38 @@ const addFooter = (doc: jsPDF, villaNumber: string = '...') => {
 
 const drawLogo = (doc: jsPDF, x: number, y: number, scale: number = 1) => {
   const orange = [249, 115, 22]; // #F97316
-  const blue = [30, 58, 138];   // #1E3A8A
+  const blue = [0, 33, 94];    // #00215E
 
   // Roof
   doc.setDrawColor(orange[0], orange[1], orange[2]);
-  doc.setLineWidth(1.2 * scale);
-  doc.line(x + (2 * scale), y + (8 * scale), x + (10 * scale), y + (2 * scale));
-  doc.line(x + (10 * scale), y + (2 * scale), x + (18 * scale), y + (8 * scale));
+  doc.setLineWidth(1.8 * scale);
+  doc.line(x + (2 * scale), y + (10 * scale), x + (12 * scale), y + (2 * scale));
+  doc.line(x + (12 * scale), y + (2 * scale), x + (22 * scale), y + (10 * scale));
   
-  doc.line(x + (4.5 * scale), y + (8 * scale), x + (10 * scale), y + (3.8 * scale));
-  doc.line(x + (10 * scale), y + (3.8 * scale), x + (15.5 * scale), y + (8 * scale));
+  // Chimney
+  doc.line(x + (17 * scale), y + (4.5 * scale), x + (17 * scale), y + (6.5 * scale));
 
-  // C Shape (Simplified)
+  // C Shape and Bottom Line
   doc.setDrawColor(blue[0], blue[1], blue[2]);
-  doc.setLineWidth(1.4 * scale);
-  doc.ellipse(x + (10 * scale), y + (10 * scale), 7 * scale, 5 * scale, 'S');
+  doc.setLineWidth(2.0 * scale);
+  // Simplified C shape using lines and arcs
+  doc.ellipse(x + (10 * scale), y + (13.5 * scale), 6 * scale, 5 * scale, 'S');
+  doc.line(x + (16 * scale), y + (18.5 * scale), x + (33 * scale), y + (18.5 * scale));
 
   // Window
   doc.setFillColor(blue[0], blue[1], blue[2]);
-  doc.rect(x + (7.5 * scale), y + (8.5 * scale), 1.8 * scale, 1.8 * scale, 'F');
-  doc.rect(x + (9.7 * scale), y + (8.5 * scale), 1.8 * scale, 1.8 * scale, 'F');
-  doc.rect(x + (7.5 * scale), y + (10.7 * scale), 1.8 * scale, 1.8 * scale, 'F');
-  doc.rect(x + (9.7 * scale), y + (10.7 * scale), 1.8 * scale, 1.8 * scale, 'F');
+  doc.rect(x + (8 * scale), y + (11 * scale), 2.2 * scale, 2.2 * scale, 'F');
+  doc.rect(x + (10.8 * scale), y + (11 * scale), 2.2 * scale, 2.2 * scale, 'F');
+  doc.rect(x + (8 * scale), y + (13.8 * scale), 2.2 * scale, 2.2 * scale, 'F');
+  doc.rect(x + (10.8 * scale), y + (13.8 * scale), 2.2 * scale, 2.2 * scale, 'F');
 
   // Text
   doc.setTextColor(blue[0], blue[1], blue[2]);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12 * scale);
-  doc.text('COUMBA FONDE', x + (19 * scale), y + (11.5 * scale));
-  doc.setFontSize(6 * scale);
-  doc.text('IMMO', x + (31.5 * scale), y + (14.5 * scale));
-
-  // Bottom Line
-  doc.setDrawColor(blue[0], blue[1], blue[2]);
-  doc.setLineWidth(0.6 * scale);
-  doc.line(x + (10 * scale), y + (15 * scale), x + (25 * scale), y + (15 * scale));
+  doc.setFontSize(14 * scale);
+  doc.text('COUMBA FONDE', x + (15 * scale), y + (16.5 * scale));
+  doc.setFontSize(8 * scale);
+  doc.text('IMMO', x + (33.5 * scale), y + (22.5 * scale));
 };
 
 const safeToLocaleString = (val: any) => {
@@ -97,19 +94,23 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     // --- MAIN CONTENT AREA ---
     const mainX = margin + 10;
     const mainContentWidth = pageWidth - (margin * 2) - 10;
-    let currentY = margin + 12;
+    let currentY = margin + 5;
     
     // Logo and Agency Info (Centered)
-    drawLogo(doc, pageWidth / 2 - 15, currentY - 10, 0.8);
-    doc.setFontSize(8);
+    const logoScale = 0.35;
+    const logoWidth = 60 * logoScale;
+    drawLogo(doc, (pageWidth - logoWidth) / 2, currentY, logoScale);
+    
+    currentY += 12;
+    doc.setFontSize(10);
     doc.setFont('times', 'bold');
-    doc.setTextColor(30, 58, 138);
-    doc.text('Tél : 77 551 96 83 Cité Bata - Rufisque', pageWidth / 2, currentY + 8, { align: 'center' });
+    doc.setTextColor(0, 33, 94);
+    doc.text('Tél : 77 551 96 83', pageWidth / 2, currentY, { align: 'center' });
     doc.setTextColor(0);
 
     // Total Amount (Clearly separated)
     const totalAmount = (receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0);
-    currentY += 20;
+    currentY += 15;
     doc.setFontSize(12);
     doc.setFont('times', 'bold');
     doc.text(`MONTANT : ${safeToLocaleString(totalAmount)} FCFA`, pageWidth - margin - 10, currentY, { align: 'right' });
@@ -196,11 +197,18 @@ export const generateContractPDF = (contract: any) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
     const contentWidth = pageWidth - (margin * 2);
-    let y = 25;
+    let y = 15;
 
     // Header - Agency Logo
-    drawLogo(doc, (pageWidth - 80) / 2, y - 10, 1.5);
-    y += 20;
+    const logoScale = 0.5;
+    const logoWidth = 60 * logoScale;
+    drawLogo(doc, (pageWidth - logoWidth) / 2, y, logoScale);
+    y += 18;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 33, 94);
+    doc.text('Tél : 77 551 96 83', pageWidth / 2, y, { align: 'center' });
+    y += 10;
 
     // Agency Subtitle
     doc.setFontSize(10);
@@ -372,15 +380,22 @@ export const generateMonthlyReportPDF = (report: any) => {
     const doc = new jsPDF();
     
     // Header with Logo
-    drawLogo(doc, (210 - 80) / 2, 10, 1.5);
+    const logoScale = 0.5;
+    const logoWidth = 60 * logoScale;
+    drawLogo(doc, (210 - logoWidth) / 2, 10, logoScale);
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 33, 94);
+    doc.text('Tél : 77 551 96 83', 105, 32, { align: 'center' });
     
     doc.setFontSize(14);
     doc.setTextColor(0);
-    doc.text(`Chez : ${report.chez || '...'}`, 20, 40);
-    doc.text(`Mois : ${report.mois || '...'}`, 150, 40);
+    doc.text(`Chez : ${report.chez || '...'}`, 20, 48);
+    doc.text(`Mois : ${report.mois || '...'}`, 150, 48);
     
     doc.setFontSize(16);
-    doc.text('BILAN MENSUEL', 105, 55, { align: 'center' });
+    doc.text('BILAN MENSUEL', 105, 63, { align: 'center' });
     
     // Table
     const columns = report.columns || [
@@ -400,7 +415,7 @@ export const generateMonthlyReportPDF = (report: any) => {
     );
 
     // Add totals as rows in the table
-    const totalPaye = (report.items || []).reduce((sum: number, item: any) => sum + (Number(item.montantPaye) || 0), 0);
+    const totalPaye = report.totalPaye !== undefined ? report.totalPaye : (report.items || []).reduce((sum: number, item: any) => sum + (Number(item.montantPaye) || 0), 0);
     const colSpan = Math.max(1, columns.length - 2);
     
     tableBody.push([

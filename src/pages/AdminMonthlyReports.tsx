@@ -42,6 +42,7 @@ const AdminMonthlyReports: React.FC = () => {
     mois: `${['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][new Date().getMonth()]} ${new Date().getFullYear()}`,
     columns: defaultColumns,
     items: [] as any[],
+    totalPaye: 0,
     totalCommission: 0,
     totalRemettre: 0,
     commissionPercentage: 10,
@@ -102,10 +103,16 @@ const AdminMonthlyReports: React.FC = () => {
     
     setNewReport(prev => ({
       ...prev,
+      totalPaye: totalPaye,
       totalCommission: commission,
       totalRemettre: aRemettre
     }));
   };
+
+  // Auto-calculate totals when items or commission change
+  useEffect(() => {
+    calculateTotals();
+  }, [newReport.items, newReport.commissionPercentage, newReport.customRows]);
 
   const months = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -236,6 +243,7 @@ const AdminMonthlyReports: React.FC = () => {
         mois: `${months[new Date().getMonth()]} ${new Date().getFullYear()}`,
         columns: defaultColumns,
         items: [],
+        totalPaye: 0,
         totalCommission: 0,
         totalRemettre: 0,
         commissionPercentage: 10,
@@ -262,6 +270,7 @@ const AdminMonthlyReports: React.FC = () => {
       mois: report.mois || '',
       columns: report.columns || defaultColumns,
       items: report.items || [],
+      totalPaye: report.totalPaye || 0,
       totalCommission: report.totalCommission || 0,
       totalRemettre: report.totalRemettre || 0,
       commissionPercentage: report.commissionPercentage || 10,
@@ -280,6 +289,7 @@ const AdminMonthlyReports: React.FC = () => {
       mois: report.mois || '',
       columns: report.columns || defaultColumns,
       items: report.items || [],
+      totalPaye: report.totalPaye || 0,
       totalCommission: report.totalCommission || 0,
       totalRemettre: report.totalRemettre || 0,
       commissionPercentage: report.commissionPercentage || 10,
@@ -384,6 +394,7 @@ const AdminMonthlyReports: React.FC = () => {
               mois: `${months[new Date().getMonth()]} ${new Date().getFullYear()}`,
               columns: defaultColumns,
               items: [],
+              totalPaye: 0,
               totalCommission: 0,
               totalRemettre: 0,
               commissionPercentage: 10,
@@ -658,10 +669,20 @@ const AdminMonthlyReports: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-700 ml-1">TOTAL (Somme des Payés)</label>
                   <input
-                    type="text"
-                    readOnly
-                    className="w-full px-5 py-4 bg-gray-100 border-none rounded-2xl focus:ring-0 outline-none cursor-not-allowed font-bold text-gray-900"
-                    value={formatAmount(newReport.items.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0))}
+                    type="number"
+                    className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-900"
+                    value={newReport.totalPaye || 0}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      const commission = Math.round(val * (newReport.commissionPercentage / 100));
+                      const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+                      setNewReport({ 
+                        ...newReport, 
+                        totalPaye: val,
+                        totalCommission: commission,
+                        totalRemettre: val - commission - totalCustom
+                      });
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
@@ -826,6 +847,7 @@ const AdminMonthlyReports: React.FC = () => {
                       chez: '',
                       mois: `${months[new Date().getMonth()]} ${new Date().getFullYear()}`,
                       items: [],
+                      totalPaye: 0,
                       totalCommission: 0,
                       totalRemettre: 0,
                       commissionPercentage: 10,

@@ -9,66 +9,68 @@ const Logo: React.FC<LogoProps> = ({ className = "h-12", variant = 'dark' }) => 
   return (
     <div className={`flex items-center ${className}`}>
       <svg
-        viewBox="0 0 400 160"
+        viewBox="0 0 1000 250"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="h-full w-auto"
       >
         {/* Roof - Orange */}
         <path
-          d="M20 80L100 20L180 80"
+          d="M20 100L120 20L220 100"
           stroke="#F97316"
-          strokeWidth="12"
+          strokeWidth="18"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
+        {/* Chimney */}
         <path
-          d="M45 80L100 38L155 80"
+          d="M170 45V65"
           stroke="#F97316"
-          strokeWidth="12"
+          strokeWidth="18"
           strokeLinecap="round"
-          strokeLinejoin="round"
         />
 
-        {/* House Body / C Shape - Blue */}
+        {/* C Shape and Bottom Line - Blue */}
         <path
-          d="M170 110C170 135 145 150 100 150C45 150 30 120 30 95C30 70 55 55 85 55"
-          stroke="#1E3A8A"
-          strokeWidth="14"
+          d="M160 85C140 70 100 70 70 85C40 110 40 160 70 185C100 210 160 210 160 185H880"
+          stroke="#00215E"
+          strokeWidth="20"
           strokeLinecap="round"
+          strokeLinejoin="round"
         />
         
         {/* Window - Blue */}
-        <rect x="75" y="85" width="18" height="18" fill="#1E3A8A" />
-        <rect x="97" y="85" width="18" height="18" fill="#1E3A8A" />
-        <rect x="75" y="107" width="18" height="18" fill="#1E3A8A" />
-        <rect x="97" y="107" width="18" height="18" fill="#1E3A8A" />
+        <rect x="80" y="110" width="22" height="22" fill="#00215E" />
+        <rect x="108" y="110" width="22" height="22" fill="#00215E" />
+        <rect x="80" y="138" width="22" height="22" fill="#00215E" />
+        <rect x="108" y="138" width="22" height="22" fill="#00215E" />
 
-        {/* Text - Blue */}
+        {/* Text - COUMBA FONDE */}
         <text
-          x="190"
-          y="115"
-          fill="#1E3A8A"
-          style={{ font: 'bold 48px sans-serif', letterSpacing: '-1px' }}
+          x="150"
+          y="165"
+          fill="#00215E"
+          style={{ 
+            font: '900 82px "Arial Narrow", sans-serif', 
+            textTransform: 'uppercase',
+            letterSpacing: '-2px'
+          }}
         >
           COUMBA FONDE
         </text>
+        
+        {/* Text - IMMO */}
         <text
-          x="315"
-          y="145"
-          fill="#1E3A8A"
-          style={{ font: 'bold 24px sans-serif' }}
+          x="755"
+          y="235"
+          fill="#00215E"
+          style={{ 
+            font: '900 36px "Arial Narrow", sans-serif',
+            textTransform: 'uppercase'
+          }}
         >
           IMMO
         </text>
-        
-        {/* Bottom Line */}
-        <path
-          d="M100 150H250"
-          stroke="#1E3A8A"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
       </svg>
     </div>
   );
