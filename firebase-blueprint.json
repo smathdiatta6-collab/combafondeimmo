@@ -5,12 +5,12 @@
       "description": "A notification for admin users",
       "type": "object",
       "properties": {
-        "title": { "type": "string", "description": "The title of the notification" },
-        "message": { "type": "string", "description": "The message of the notification" },
-        "type": { "type": "string", "enum": ["message", "payment", "contract", "system"], "description": "The type of notification" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "When the notification was created" },
-        "read": { "type": "boolean", "description": "Whether the notification has been read" },
-        "link": { "type": "string", "description": "Optional link to navigate to" }
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["message", "payment", "contract", "system"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" },
+        "link": { "type": "string" }
       },
       "required": ["title", "message", "type", "createdAt", "read"]
     },
@@ -27,6 +27,93 @@
         "status": { "type": "string", "enum": ["unread", "read"] }
       },
       "required": ["name", "email", "subject", "message", "createdAt", "status"]
+    },
+    "PaymentMethod": {
+      "title": "Payment Method",
+      "description": "A payment method supported by the agency",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["Wave", "Orange Money", "Virement Bancaire", "Espèces"] },
+        "details": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["name", "type", "details"]
+    },
+    "Contract": {
+      "title": "Contract",
+      "description": "A rental or sale contract",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string", "format": "email" },
+        "propertyId": { "type": "string" },
+        "type": { "type": "string", "enum": ["Location", "Vente"] },
+        "price": { "type": "number" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["Actif", "Payé", "Terminé", "Annulé"] }
+      },
+      "required": ["clientName", "propertyId", "type", "price", "startDate", "status"]
+    },
+    "Receipt": {
+      "title": "Receipt",
+      "description": "A payment receipt",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "contractId": { "type": "string" },
+        "paymentMethodId": { "type": "string" },
+        "reference": { "type": "string" }
+      },
+      "required": ["clientName", "amount", "date", "contractId", "paymentMethodId"]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "A real estate property",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "city": { "type": "string" },
+        "price": { "type": "number" },
+        "type": { "type": "string", "enum": ["Maison", "Villa", "Terrain", "Appartement"] },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["title", "city", "price", "type", "description", "image"]
+    },
+    "MonthlyReport": {
+      "title": "Monthly Report",
+      "description": "A monthly bilan for a landlord",
+      "type": "object",
+      "properties": {
+        "chez": { "type": "string" },
+        "mois": { "type": "string" },
+        "items": { "type": "array" },
+        "totalPaye": { "type": "number" },
+        "totalCommission": { "type": "number" },
+        "totalRemettre": { "type": "number" },
+        "commissionPercentage": { "type": "number" },
+        "arreteSomme": { "type": "string" },
+        "date": { "type": "string" },
+        "villaNumber": { "type": "string" },
+        "customRows": { "type": "array" }
+      },
+      "required": ["chez", "mois", "items", "totalCommission", "totalRemettre", "date"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "displayName": { "type": "string" }
+      },
+      "required": ["email", "role"]
     }
   },
   "firestore": {
@@ -37,6 +124,30 @@
     "/contacts/{contactId}": {
       "schema": "Contact",
       "description": "Collection of contact messages"
+    },
+    "/paymentMethods/{methodId}": {
+      "schema": "PaymentMethod",
+      "description": "Collection of payment methods"
+    },
+    "/contracts/{contractId}": {
+      "schema": "Contract",
+      "description": "Collection of real estate contracts"
+    },
+    "/receipts/{receiptId}": {
+      "schema": "Receipt",
+      "description": "Collection of payment receipts"
+    },
+    "/properties/{propertyId}": {
+      "schema": "Property",
+      "description": "Collection of real estate listings"
+    },
+    "/monthlyReports/{reportId}": {
+      "schema": "MonthlyReport",
+      "description": "Collection of monthly reports for landlords"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles"
     }
   }
 }

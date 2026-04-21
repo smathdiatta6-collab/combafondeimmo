@@ -418,15 +418,19 @@ export const generateMonthlyReportPDF = (report: any) => {
     const totalPaye = report.totalPaye !== undefined ? report.totalPaye : (report.items || []).reduce((sum: number, item: any) => sum + (Number(item.montantPaye) || 0), 0);
     const colSpan = Math.max(1, columns.length - 2);
     
-    tableBody.push([
-      { content: 'TOTAL', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: `${safeToLocaleString(totalPaye)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
-    ]);
+    if (!report.hideTotalPaye) {
+      tableBody.push([
+        { content: 'TOTAL', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: `${safeToLocaleString(totalPaye)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+      ]);
+    }
 
-    tableBody.push([
-      { content: 'Commission', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: `${safeToLocaleString(report.totalCommission)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
-    ]);
+    if (!report.hideCommission) {
+      tableBody.push([
+        { content: 'Commission', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: `${safeToLocaleString(report.totalCommission)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+      ]);
+    }
 
     // Add custom rows if any
     if (report.customRows && Array.isArray(report.customRows) && report.customRows.length > 0) {

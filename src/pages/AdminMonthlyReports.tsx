@@ -49,7 +49,9 @@ const AdminMonthlyReports: React.FC = () => {
     arreteSomme: '',
     date: new Date().toISOString().split('T')[0],
     villaNumber: '',
-    customRows: [] as { label: string, value: number }[]
+    customRows: [] as { label: string, value: number }[],
+    hideTotalPaye: false,
+    hideCommission: false
   });
 
   useEffect(() => {
@@ -109,10 +111,24 @@ const AdminMonthlyReports: React.FC = () => {
     }));
   };
 
-  // Auto-calculate totals when items or commission change
-  useEffect(() => {
-    calculateTotals();
-  }, [newReport.items, newReport.commissionPercentage, newReport.customRows]);
+  const updateReportTotals = (report: typeof newReport) => {
+    const totalPaye = report.items.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0);
+    const commission = Math.round(totalPaye * (report.commissionPercentage / 100));
+    const totalCustom = (report.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+    
+    // Calculate final amount to remit
+    // If totalPaye and commission are hidden, we might still want to base 'aRemettre' on items sum vs custom rows?
+    // User said they "don't need" these fields, usually meaning they want them off the paper.
+    // If hidden, commission is usually considered 0 for the remit calculation if the user wants it removed.
+    const effectiveCommission = report.hideCommission ? 0 : commission;
+    
+    return {
+      ...report,
+      totalPaye,
+      totalCommission: commission,
+      totalRemettre: totalPaye - effectiveCommission - totalCustom
+    };
+  };
 
   const months = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -151,24 +167,24 @@ const AdminMonthlyReports: React.FC = () => {
         initialItem[col.id] = col.type === 'number' ? 0 : '';
       }
     });
-    setNewReport({
+    setNewReport(updateReportTotals({
       ...newReport,
       items: [...newReport.items, initialItem]
-    });
+    }));
   };
 
   const handleDuplicateRow = (index: number) => {
     const itemToDuplicate = { ...newReport.items[index] };
-    setNewReport({
+    setNewReport(updateReportTotals({
       ...newReport,
       items: [...newReport.items, itemToDuplicate]
-    });
+    }));
   };
 
   const handleRemoveItem = (index: number) => {
     const updatedItems = [...newReport.items];
     updatedItems.splice(index, 1);
-    setNewReport({ ...newReport, items: updatedItems });
+    setNewReport(updateReportTotals({ ...newReport, items: updatedItems }));
   };
 
   const handleAddCustomRow = () => {
@@ -184,10 +200,10 @@ const AdminMonthlyReports: React.FC = () => {
       updatedCustomRows.push({ ...customRowData });
     }
 
-    setNewReport({
+    setNewReport(updateReportTotals({
       ...newReport,
       customRows: updatedCustomRows
-    });
+    }));
     setCustomRowData({ label: '', value: 0 });
     setEditingCustomRowIndex(null);
     setShowCustomRowForm(false);
@@ -203,7 +219,7 @@ const AdminMonthlyReports: React.FC = () => {
   const handleRemoveCustomRow = (index: number) => {
     const updated = [...(newReport.customRows || [])];
     updated.splice(index, 1);
-    setNewReport({ ...newReport, customRows: updated });
+    setNewReport(updateReportTotals({ ...newReport, customRows: updated }));
     if (editingCustomRowIndex === index) {
       setEditingCustomRowIndex(null);
       setCustomRowData({ label: '', value: 0 });
@@ -596,7 +612,7 @@ const AdminMonthlyReports: React.FC = () => {
                                       ...updatedItems[idx], 
                                       [col.id]: val
                                     };
-                                    setNewReport({ ...newReport, items: updatedItems });
+                                    setNewReport(updateReportTotals({ ...newReport, items: updatedItems }));
                                   }}
                                 />
                               </td>
@@ -633,6 +649,30 @@ const AdminMonthlyReports: React.FC = () => {
                 )}
               </div>
 
+              <div className="flex flex-wrap gap-4 mb-6">
+                <label className="flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-2 rounded-xl hover:bg-gray-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.hideTotalPaye}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, hideTotalPaye: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Masquer Total Payé</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-2 rounded-xl hover:bg-gray-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.hideCommission}
+                    onChange={(e) => {
+                      const hidden = e.target.checked;
+                      setNewReport(prev => updateReportTotals({ ...prev, hideCommission: hidden }));
+                    }}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Masquer Commission</span>
+                </label>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
                 <div className="space-y-2">
                   <button
@@ -659,43 +699,60 @@ const AdminMonthlyReports: React.FC = () => {
                   <select
                     className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
                     value={newReport.commissionPercentage}
-                    onChange={(e) => setNewReport({ ...newReport, commissionPercentage: parseInt(e.target.value) })}
+                    onChange={(e) => {
+                      const pct = parseInt(e.target.value);
+                      setNewReport(updateReportTotals({ ...newReport, commissionPercentage: pct }));
+                    }}
                   >
                     {Array.from({ length: 101 }, (_, i) => (
                       <option key={i} value={i}>{i}%</option>
                     ))}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 ml-1">TOTAL (Somme des Payés)</label>
-                  <input
-                    type="number"
-                    className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-900"
-                    value={newReport.totalPaye || 0}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
-                      const commission = Math.round(val * (newReport.commissionPercentage / 100));
-                      const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
-                      setNewReport({ 
-                        ...newReport, 
-                        totalPaye: val,
-                        totalCommission: commission,
-                        totalRemettre: val - commission - totalCustom
-                      });
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 ml-1">Commission ({newReport.commissionPercentage}%)</label>
-                  <div className="relative">
+                {!newReport.hideTotalPaye && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 ml-1">TOTAL (Somme des Payés)</label>
                     <input
                       type="number"
-                      className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-700"
-                      value={newReport.totalCommission || 0}
-                      onChange={(e) => setNewReport({ ...newReport, totalCommission: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-900"
+                      value={newReport.totalPaye || 0}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const commission = Math.round(val * (newReport.commissionPercentage / 100));
+                        const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+                        const effectiveCommission = newReport.hideCommission ? 0 : commission;
+                        setNewReport({ 
+                          ...newReport, 
+                          totalPaye: val,
+                          totalCommission: commission,
+                          totalRemettre: val - effectiveCommission - totalCustom
+                        });
+                      }}
                     />
                   </div>
-                </div>
+                )}
+                {!newReport.hideCommission && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 ml-1">Commission ({newReport.commissionPercentage}%)</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-700"
+                        value={newReport.totalCommission || 0}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          const totalPaye = newReport.totalPaye || 0;
+                          const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+                          setNewReport({ 
+                            ...newReport, 
+                            totalCommission: val,
+                            totalRemettre: totalPaye - val - totalCustom
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-700 ml-1">Total à Remettre</label>
                   <div className="relative">
