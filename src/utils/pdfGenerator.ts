@@ -67,8 +67,9 @@ const drawLogo = (doc: jsPDF, x: number, y: number, scale: number = 1) => {
 };
 
 const safeToLocaleString = (val: any) => {
+  if (val === undefined || val === null || val === '') return '';
   const num = Number(val);
-  if (isNaN(num)) return '0';
+  if (isNaN(num)) return String(val);
   // Use dots as thousand separators
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
@@ -395,7 +396,7 @@ export const generateMonthlyReportPDF = (report: any) => {
     doc.text(`Mois : ${report.mois || '...'}`, 150, 48);
     
     doc.setFontSize(16);
-    doc.text('BILAN MENSUEL', 105, 63, { align: 'center' });
+    doc.text(report.title || 'BILAN MENSUEL', 105, 63, { align: 'center' });
     
     // Table
     const columns = report.columns || [
@@ -410,25 +411,28 @@ export const generateMonthlyReportPDF = (report: any) => {
     const tableBody = (report.items || []).map((item: any) => 
       columns.map((col: any) => {
         const val = item[col.id];
-        return col.type === 'number' ? `${safeToLocaleString(val)} FCFA` : (val || '');
+        const suffix = col.suffix !== undefined ? col.suffix : (col.type === 'number' ? ' FCFA' : '');
+        const formatted = safeToLocaleString(val);
+        return formatted === '' ? '' : `${formatted}${suffix}`;
       })
     );
 
     // Add totals as rows in the table
     const totalPaye = report.totalPaye !== undefined ? report.totalPaye : (report.items || []).reduce((sum: number, item: any) => sum + (Number(item.montantPaye) || 0), 0);
     const colSpan = Math.max(1, columns.length - 2);
+    const reportCurrency = report.reportCurrency !== undefined ? report.reportCurrency : ' FCFA';
     
     if (!report.hideTotalPaye) {
       tableBody.push([
         { content: 'TOTAL', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
-        { content: `${safeToLocaleString(totalPaye)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+        { content: `${safeToLocaleString(totalPaye)}${reportCurrency}`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
       ]);
     }
 
     if (!report.hideCommission) {
       tableBody.push([
         { content: 'Commission', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
-        { content: `${safeToLocaleString(report.totalCommission)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+        { content: `${safeToLocaleString(report.totalCommission)}${reportCurrency}`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
       ]);
     }
 
@@ -436,9 +440,10 @@ export const generateMonthlyReportPDF = (report: any) => {
     if (report.customRows && Array.isArray(report.customRows) && report.customRows.length > 0) {
       report.customRows.forEach((row: any) => {
         if (row && row.label) {
+          const suffix = row.suffix !== undefined ? row.suffix : ' FCFA';
           tableBody.push([
             { content: row.label, colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
-            { content: `${safeToLocaleString(row.value)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+            { content: `${safeToLocaleString(row.value)}${suffix}`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
           ]);
         }
       });
@@ -446,7 +451,7 @@ export const generateMonthlyReportPDF = (report: any) => {
 
     tableBody.push([
       { content: 'Total à remettre', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: `${safeToLocaleString(report.totalRemettre)} FCFA`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+      { content: `${safeToLocaleString(report.totalRemettre)}${reportCurrency}`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
     ]);
 
     autoTable(doc, {

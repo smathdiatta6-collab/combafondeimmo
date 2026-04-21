@@ -13,6 +13,7 @@ interface Column {
   id: string;
   label: string;
   type: 'text' | 'number';
+  suffix?: string;
 }
 
 const AdminMonthlyReports: React.FC = () => {
@@ -26,7 +27,7 @@ const AdminMonthlyReports: React.FC = () => {
   const [hasRestored, setHasRestored] = useState(false);
   const [showColumnManager, setShowColumnManager] = useState(false);
   const [showCustomRowForm, setShowCustomRowForm] = useState(false);
-  const [customRowData, setCustomRowData] = useState({ label: '', value: 0 });
+  const [customRowData, setCustomRowData] = useState({ label: '', value: 0, suffix: ' FCFA' });
   const [editingCustomRowIndex, setEditingCustomRowIndex] = useState<number | null>(null);
   
   const defaultColumns: Column[] = [
@@ -49,9 +50,11 @@ const AdminMonthlyReports: React.FC = () => {
     arreteSomme: '',
     date: new Date().toISOString().split('T')[0],
     villaNumber: '',
-    customRows: [] as { label: string, value: number }[],
+    customRows: [] as { label: string, value: number, suffix?: string }[],
     hideTotalPaye: false,
-    hideCommission: false
+    hideCommission: false,
+    reportCurrency: ' FCFA',
+    title: 'BILAN MENSUEL'
   });
 
   useEffect(() => {
@@ -90,12 +93,13 @@ const AdminMonthlyReports: React.FC = () => {
   useEffect(() => {
     const words = numberToWordsFrench(newReport.totalRemettre);
     const formatted = newReport.totalRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    const currency = newReport.reportCurrency?.trim() || 'FCFA';
     
     setNewReport(prev => ({
       ...prev,
-      arreteSomme: `${words} FRANCS CFA (${formatted})`
+      arreteSomme: `${words} ${currency} (${formatted})`
     }));
-  }, [newReport.totalRemettre]);
+  }, [newReport.totalRemettre, newReport.reportCurrency]);
 
   const calculateTotals = () => {
     const totalPaye = newReport.items.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0);
@@ -204,14 +208,14 @@ const AdminMonthlyReports: React.FC = () => {
       ...newReport,
       customRows: updatedCustomRows
     }));
-    setCustomRowData({ label: '', value: 0 });
+    setCustomRowData({ label: '', value: 0, suffix: ' FCFA' });
     setEditingCustomRowIndex(null);
     setShowCustomRowForm(false);
   };
 
   const handleEditCustomRow = (index: number) => {
     const row = newReport.customRows[index];
-    setCustomRowData({ label: row.label, value: row.value });
+    setCustomRowData({ label: row.label, value: row.value, suffix: row.suffix || ' FCFA' });
     setEditingCustomRowIndex(index);
     setShowCustomRowForm(true);
   };
@@ -222,7 +226,7 @@ const AdminMonthlyReports: React.FC = () => {
     setNewReport(updateReportTotals({ ...newReport, customRows: updated }));
     if (editingCustomRowIndex === index) {
       setEditingCustomRowIndex(null);
-      setCustomRowData({ label: '', value: 0 });
+      setCustomRowData({ label: '', value: 0, suffix: ' FCFA' });
     }
   };
 
@@ -266,7 +270,10 @@ const AdminMonthlyReports: React.FC = () => {
         arreteSomme: '',
         date: new Date().toISOString().split('T')[0],
         villaNumber: '',
-        customRows: []
+        customRows: [],
+        hideTotalPaye: false,
+        hideCommission: false,
+        title: 'BILAN MENSUEL'
       });
       setIsAdding(false);
       setEditingId(null);
@@ -293,7 +300,11 @@ const AdminMonthlyReports: React.FC = () => {
       arreteSomme: report.arreteSomme || '',
       date: report.date || new Date().toISOString().split('T')[0],
       villaNumber: report.villaNumber || '',
-      customRows: report.customRows || []
+      customRows: report.customRows || [],
+      hideTotalPaye: !!report.hideTotalPaye,
+      hideCommission: !!report.hideCommission,
+      reportCurrency: report.reportCurrency || ' FCFA',
+      title: report.title || 'BILAN MENSUEL'
     });
     setEditingId(report.id);
     setIsAdding(true);
@@ -312,7 +323,11 @@ const AdminMonthlyReports: React.FC = () => {
       arreteSomme: report.arreteSomme || '',
       date: new Date().toISOString().split('T')[0],
       villaNumber: report.villaNumber || '',
-      customRows: report.customRows || []
+      customRows: report.customRows || [],
+      hideTotalPaye: !!report.hideTotalPaye,
+      hideCommission: !!report.hideCommission,
+      reportCurrency: report.reportCurrency || ' FCFA',
+      title: report.title || 'BILAN MENSUEL'
     });
     setEditingId(null);
     setIsAdding(true);
@@ -417,7 +432,11 @@ const AdminMonthlyReports: React.FC = () => {
               arreteSomme: '',
               date: new Date().toISOString().split('T')[0],
               villaNumber: '',
-              customRows: []
+              customRows: [],
+              hideTotalPaye: false,
+              hideCommission: false,
+              reportCurrency: ' FCFA',
+              title: 'BILAN MENSUEL'
             });
             localStorage.removeItem('draft_monthly_report');
           }}
@@ -434,6 +453,17 @@ const AdminMonthlyReports: React.FC = () => {
             )}
 
             <form onSubmit={handleAddReport} className="space-y-8">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">Titre du document (ex: BILAN MENSUEL, FACTURE, etc.)</label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-white border-2 border-blue-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-900 text-xl uppercase"
+                  placeholder="BILAN MENSUEL"
+                  value={newReport.title}
+                  onChange={(e) => setNewReport({ ...newReport, title: e.target.value.toUpperCase() })}
+                />
+              </div>
+
               {/* Column Management */}
               <div className="mb-8">
                 <button
@@ -476,6 +506,19 @@ const AdminMonthlyReports: React.FC = () => {
                             <option value="text">Texte</option>
                             <option value="number">Nombre</option>
                           </select>
+                          {col.type === 'number' && (
+                            <input
+                              type="text"
+                              className="w-16 bg-gray-50 border-none rounded-lg text-xs px-2 py-1"
+                              value={col.suffix !== undefined ? col.suffix : ' FCFA'}
+                              placeholder="Unité"
+                              onChange={(e) => {
+                                const updated = [...newReport.columns];
+                                updated[index].suffix = e.target.value;
+                                setNewReport({ ...newReport, columns: updated });
+                              }}
+                            />
+                          )}
                           <div className="flex gap-1">
                             <button
                               type="button"
@@ -607,7 +650,8 @@ const AdminMonthlyReports: React.FC = () => {
                                   value={item[col.id] ?? (col.type === 'number' ? 0 : '')}
                                   onChange={(e) => {
                                     const updatedItems = [...newReport.items];
-                                    const val = col.type === 'number' ? (parseFloat(e.target.value) || 0) : e.target.value;
+                                    const rawVal = e.target.value;
+                                    const val = col.type === 'number' ? (rawVal === '' ? '' : parseFloat(rawVal)) : rawVal;
                                     updatedItems[idx] = { 
                                       ...updatedItems[idx], 
                                       [col.id]: val
@@ -671,6 +715,15 @@ const AdminMonthlyReports: React.FC = () => {
                   />
                   <span className="text-sm font-medium text-gray-700">Masquer Commission</span>
                 </label>
+                <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-xl">
+                  <span className="text-sm font-medium text-gray-700">Devise :</span>
+                  <input
+                    type="text"
+                    className="w-20 bg-white border-none rounded-lg text-sm px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newReport.reportCurrency}
+                    onChange={(e) => setNewReport({ ...newReport, reportCurrency: e.target.value })}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
@@ -822,13 +875,22 @@ const AdminMonthlyReports: React.FC = () => {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-orange-400 ml-1 uppercase">Montant (FCFA)</label>
-                      <input
-                        type="number"
-                        className="w-full px-4 py-3 bg-white border-none rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
-                        value={customRowData.value}
-                        onChange={(e) => setCustomRowData({ ...customRowData, value: parseFloat(e.target.value) || 0 })}
-                      />
+                      <label className="text-xs font-bold text-orange-400 ml-1 uppercase">Montant</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          className="flex-1 px-4 py-3 bg-white border-none rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                          value={customRowData.value}
+                          onChange={(e) => setCustomRowData({ ...customRowData, value: parseFloat(e.target.value) || 0 })}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Unité"
+                          className="w-20 px-4 py-3 bg-white border-none rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                          value={customRowData.suffix}
+                          onChange={(e) => setCustomRowData({ ...customRowData, suffix: e.target.value })}
+                        />
+                      </div>
                     </div>
                     <div className="flex items-end">
                       <button
@@ -852,7 +914,7 @@ const AdminMonthlyReports: React.FC = () => {
                       <div key={idx} className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl">
                         <div className="flex items-center gap-4">
                           <span className="font-bold text-gray-700">{row.label}</span>
-                          <span className="text-blue-900 font-mono font-bold">{formatAmount(row.value)} FCFA</span>
+                          <span className="text-blue-900 font-mono font-bold">{formatAmount(row.value)}{row.suffix || ' FCFA'}</span>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -910,7 +972,10 @@ const AdminMonthlyReports: React.FC = () => {
                       commissionPercentage: 10,
                       arreteSomme: '',
                       date: new Date().toISOString().split('T')[0],
-                      villaNumber: ''
+                      villaNumber: '',
+                      hideTotalPaye: false,
+                      hideCommission: false,
+                      title: 'BILAN MENSUEL'
                     });
                   }
                 }} className="bg-gray-200 text-gray-700 px-8 py-4 rounded-2xl font-bold hover:bg-gray-300 transition-all">

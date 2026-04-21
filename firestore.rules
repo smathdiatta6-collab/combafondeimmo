@@ -135,6 +135,10 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /_connection_test_/{docId} {
+      allow read: if true;
+    }
+
     match /monthlyReports/{reportId} {
       allow read, write: if isAdmin();
     }
