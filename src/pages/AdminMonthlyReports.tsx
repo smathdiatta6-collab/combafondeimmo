@@ -54,7 +54,8 @@ const AdminMonthlyReports: React.FC = () => {
     hideTotalPaye: false,
     hideCommission: false,
     reportCurrency: ' FCFA',
-    title: 'BILAN MENSUEL'
+    title: 'BILAN MENSUEL',
+    isManualTotalRemettre: false
   });
 
   useEffect(() => {
@@ -124,13 +125,15 @@ const AdminMonthlyReports: React.FC = () => {
     // If totalPaye and commission are hidden, we might still want to base 'aRemettre' on items sum vs custom rows?
     // User said they "don't need" these fields, usually meaning they want them off the paper.
     // If hidden, commission is usually considered 0 for the remit calculation if the user wants it removed.
+    // If isManualTotalRemettre is true, we don't recalculate totalRemettre
     const effectiveCommission = report.hideCommission ? 0 : commission;
+    const calculatedTotalRemettre = totalPaye - effectiveCommission - totalCustom;
     
     return {
       ...report,
       totalPaye,
       totalCommission: commission,
-      totalRemettre: totalPaye - effectiveCommission - totalCustom
+      totalRemettre: report.isManualTotalRemettre ? report.totalRemettre : calculatedTotalRemettre
     };
   };
 
@@ -273,7 +276,8 @@ const AdminMonthlyReports: React.FC = () => {
         customRows: [],
         hideTotalPaye: false,
         hideCommission: false,
-        title: 'BILAN MENSUEL'
+        title: 'BILAN MENSUEL',
+        isManualTotalRemettre: false
       });
       setIsAdding(false);
       setEditingId(null);
@@ -304,7 +308,8 @@ const AdminMonthlyReports: React.FC = () => {
       hideTotalPaye: !!report.hideTotalPaye,
       hideCommission: !!report.hideCommission,
       reportCurrency: report.reportCurrency || ' FCFA',
-      title: report.title || 'BILAN MENSUEL'
+      title: report.title || 'BILAN MENSUEL',
+      isManualTotalRemettre: !!report.isManualTotalRemettre
     });
     setEditingId(report.id);
     setIsAdding(true);
@@ -327,7 +332,8 @@ const AdminMonthlyReports: React.FC = () => {
       hideTotalPaye: !!report.hideTotalPaye,
       hideCommission: !!report.hideCommission,
       reportCurrency: report.reportCurrency || ' FCFA',
-      title: report.title || 'BILAN MENSUEL'
+      title: report.title || 'BILAN MENSUEL',
+      isManualTotalRemettre: !!report.isManualTotalRemettre
     });
     setEditingId(null);
     setIsAdding(true);
@@ -436,7 +442,8 @@ const AdminMonthlyReports: React.FC = () => {
               hideTotalPaye: false,
               hideCommission: false,
               reportCurrency: ' FCFA',
-              title: 'BILAN MENSUEL'
+              title: 'BILAN MENSUEL',
+              isManualTotalRemettre: false
             });
             localStorage.removeItem('draft_monthly_report');
           }}
@@ -715,6 +722,15 @@ const AdminMonthlyReports: React.FC = () => {
                   />
                   <span className="text-sm font-medium text-gray-700">Masquer Commission</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.isManualTotalRemettre}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, isManualTotalRemettre: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                  />
+                  <span className="text-sm font-medium text-green-700 font-bold">Saisie manuelle Total à Remettre</span>
+                </label>
                 <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-xl">
                   <span className="text-sm font-medium text-gray-700">Devise :</span>
                   <input
@@ -811,10 +827,17 @@ const AdminMonthlyReports: React.FC = () => {
                   <div className="relative">
                     <input
                       type="number"
-                      className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-green-500 outline-none transition-all font-bold text-green-700"
+                      className={`w-full px-5 py-4 border-none rounded-2xl focus:ring-2 outline-none transition-all font-bold ${
+                        newReport.isManualTotalRemettre 
+                        ? 'bg-green-50 text-green-700 focus:ring-green-500 ring-2 ring-green-200' 
+                        : 'bg-gray-50 text-green-700 focus:ring-green-500'
+                      }`}
                       value={newReport.totalRemettre || 0}
                       onChange={(e) => setNewReport({ ...newReport, totalRemettre: parseFloat(e.target.value) || 0 })}
                     />
+                    {newReport.isManualTotalRemettre && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] bg-green-200 text-green-800 px-2 py-1 rounded-lg uppercase font-black">Manuel</span>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2 flex items-end">
@@ -975,7 +998,8 @@ const AdminMonthlyReports: React.FC = () => {
                       villaNumber: '',
                       hideTotalPaye: false,
                       hideCommission: false,
-                      title: 'BILAN MENSUEL'
+                      title: 'BILAN MENSUEL',
+                      isManualTotalRemettre: false
                     });
                   }
                 }} className="bg-gray-200 text-gray-700 px-8 py-4 rounded-2xl font-bold hover:bg-gray-300 transition-all">
