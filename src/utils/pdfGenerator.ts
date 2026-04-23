@@ -392,7 +392,7 @@ export const generateMonthlyReportPDF = (report: any) => {
     
     doc.setFontSize(14);
     doc.setTextColor(0);
-    doc.text(`Chez : ${report.chez || '...'}`, 20, 48);
+    doc.text(`${report.bailleurLabel || 'Chez'} : ${report.chez || '...'}`, 20, 48);
     doc.text(`Mois : ${report.mois || '...'}`, 150, 48);
     
     doc.setFontSize(16);
@@ -493,8 +493,8 @@ export const generateMonthlyReportPDF = (report: any) => {
     const formattedReportDate = report.date ? new Date(report.date).toLocaleDateString('fr-FR') : '...';
     doc.text(`Fait à Rufisque, le ${formattedReportDate}`, pageWidth - 20, finalY + 30, { align: 'right' });
     
-    doc.text('La Gérante', 40, finalY + 45);
-    doc.text('Le BAILLEUR', 140, finalY + 45);
+    doc.text(report.managerTitle || 'La Gérante', 40, finalY + 45);
+    doc.text(report.bailleurLabel || 'Le BAILLEUR', 140, finalY + 45);
     
     addFooter(doc, report.villaNumber);
     

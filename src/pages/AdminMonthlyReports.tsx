@@ -55,7 +55,9 @@ const AdminMonthlyReports: React.FC = () => {
     hideCommission: false,
     reportCurrency: ' FCFA',
     title: 'BILAN MENSUEL',
-    isManualTotalRemettre: false
+    isManualTotalRemettre: false,
+    managerTitle: 'La Gérante',
+    bailleurLabel: 'Le BAILLEUR'
   });
 
   useEffect(() => {
@@ -277,7 +279,9 @@ const AdminMonthlyReports: React.FC = () => {
         hideTotalPaye: false,
         hideCommission: false,
         title: 'BILAN MENSUEL',
-        isManualTotalRemettre: false
+        isManualTotalRemettre: false,
+        managerTitle: 'La Gérante',
+        bailleurLabel: 'Le BAILLEUR'
       });
       setIsAdding(false);
       setEditingId(null);
@@ -309,7 +313,9 @@ const AdminMonthlyReports: React.FC = () => {
       hideCommission: !!report.hideCommission,
       reportCurrency: report.reportCurrency || ' FCFA',
       title: report.title || 'BILAN MENSUEL',
-      isManualTotalRemettre: !!report.isManualTotalRemettre
+      isManualTotalRemettre: !!report.isManualTotalRemettre,
+      managerTitle: report.managerTitle || 'La Gérante',
+      bailleurLabel: report.bailleurLabel || 'Le BAILLEUR'
     });
     setEditingId(report.id);
     setIsAdding(true);
@@ -333,7 +339,9 @@ const AdminMonthlyReports: React.FC = () => {
       hideCommission: !!report.hideCommission,
       reportCurrency: report.reportCurrency || ' FCFA',
       title: report.title || 'BILAN MENSUEL',
-      isManualTotalRemettre: !!report.isManualTotalRemettre
+      isManualTotalRemettre: !!report.isManualTotalRemettre,
+      managerTitle: report.managerTitle || 'La Gérante',
+      bailleurLabel: report.bailleurLabel || 'Le BAILLEUR'
     });
     setEditingId(null);
     setIsAdding(true);
@@ -443,7 +451,9 @@ const AdminMonthlyReports: React.FC = () => {
               hideCommission: false,
               reportCurrency: ' FCFA',
               title: 'BILAN MENSUEL',
-              isManualTotalRemettre: false
+              isManualTotalRemettre: false,
+              managerTitle: 'La Gérante',
+              bailleurLabel: 'Le BAILLEUR'
             });
             localStorage.removeItem('draft_monthly_report');
           }}
@@ -460,15 +470,39 @@ const AdminMonthlyReports: React.FC = () => {
             )}
 
             <form onSubmit={handleAddReport} className="space-y-8">
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">Titre du document (ex: BILAN MENSUEL, FACTURE, etc.)</label>
-                <input
-                  type="text"
-                  className="w-full px-5 py-4 bg-white border-2 border-blue-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-900 text-xl uppercase"
-                  placeholder="BILAN MENSUEL"
-                  value={newReport.title}
-                  onChange={(e) => setNewReport({ ...newReport, title: e.target.value.toUpperCase() })}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 ml-1">Titre du document (ex: BILAN MENSUEL, FACTURE, etc.)</label>
+                  <input
+                    type="text"
+                    className="w-full px-5 py-4 bg-white border-2 border-blue-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-900 text-xl uppercase"
+                    placeholder="BILAN MENSUEL"
+                    value={newReport.title}
+                    onChange={(e) => setNewReport({ ...newReport, title: e.target.value.toUpperCase() })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 ml-1">Titre Gérant(e)</label>
+                    <input
+                      type="text"
+                      className="w-full px-5 py-2 bg-white border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                      placeholder="La Gérante"
+                      value={newReport.managerTitle}
+                      onChange={(e) => setNewReport({ ...newReport, managerTitle: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 ml-1">Libellé Bailleur</label>
+                    <input
+                      type="text"
+                      className="w-full px-5 py-2 bg-white border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                      placeholder="Le BAILLEUR"
+                      value={newReport.bailleurLabel}
+                      onChange={(e) => setNewReport({ ...newReport, bailleurLabel: e.target.value })}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Column Management */}
@@ -999,7 +1033,9 @@ const AdminMonthlyReports: React.FC = () => {
                       hideTotalPaye: false,
                       hideCommission: false,
                       title: 'BILAN MENSUEL',
-                      isManualTotalRemettre: false
+                      isManualTotalRemettre: false,
+                      managerTitle: 'La Gérante',
+                      bailleurLabel: 'Le BAILLEUR'
                     });
                   }
                 }} className="bg-gray-200 text-gray-700 px-8 py-4 rounded-2xl font-bold hover:bg-gray-300 transition-all">
