@@ -392,7 +392,7 @@ export const generateMonthlyReportPDF = (report: any) => {
     
     doc.setFontSize(14);
     doc.setTextColor(0);
-    doc.text(`${report.bailleurLabel || 'Chez'} : ${report.chez || '...'}`, 20, 48);
+    doc.text(`Chez : ${report.chez || '...'}`, 20, 48);
     doc.text(`Mois : ${report.mois || '...'}`, 150, 48);
     
     doc.setFontSize(16);

@@ -14,6 +14,7 @@ interface Column {
   label: string;
   type: 'text' | 'number';
   suffix?: string;
+  formula?: string;
 }
 
 const AdminMonthlyReports: React.FC = () => {
@@ -118,21 +119,53 @@ const AdminMonthlyReports: React.FC = () => {
     }));
   };
 
+  const evaluateFormula = (formula: string, item: any) => {
+    try {
+      let expression = formula;
+      // Sort keys by length descending to avoid partial replacements (e.g. 'amount' replacing 'amount_total')
+      const keys = Object.keys(item).sort((a, b) => b.length - a.length);
+      keys.forEach(key => {
+        const val = item[key] === '' || item[key] === undefined || item[key] === null ? 0 : item[key];
+        // Use regex with word boundaries if it's alphanumeric, or literal replace
+        const regex = new RegExp(`\\b${key}\\b`, 'g');
+        expression = expression.replace(regex, val.toString());
+      });
+      
+      // Basic safety check: only allow numbers and operators
+      if (!/^[0-9\s\+\-\*\/\.\(\)]+$/.test(expression)) {
+        return 0;
+      }
+      
+      // eslint-disable-next-line no-eval
+      const result = eval(expression);
+      return isNaN(result) ? 0 : result;
+    } catch (e) {
+      return 0;
+    }
+  };
+
   const updateReportTotals = (report: typeof newReport) => {
-    const totalPaye = report.items.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0);
+    // First, update any formula columns in items
+    const updatedItems = report.items.map(item => {
+      let newItem = { ...item };
+      report.columns.forEach(col => {
+        if (col.formula && col.type === 'number') {
+          newItem[col.id] = evaluateFormula(col.formula, newItem);
+        }
+      });
+      return newItem;
+    });
+
+    const totalPaye = updatedItems.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0);
     const commission = Math.round(totalPaye * (report.commissionPercentage / 100));
     const totalCustom = (report.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
     
-    // Calculate final amount to remit
-    // If totalPaye and commission are hidden, we might still want to base 'aRemettre' on items sum vs custom rows?
-    // User said they "don't need" these fields, usually meaning they want them off the paper.
-    // If hidden, commission is usually considered 0 for the remit calculation if the user wants it removed.
-    // If isManualTotalRemettre is true, we don't recalculate totalRemettre
     const effectiveCommission = report.hideCommission ? 0 : commission;
     const calculatedTotalRemettre = totalPaye - effectiveCommission - totalCustom;
     
     return {
       ...report,
+      items: updatedItems,
       totalPaye,
       totalCommission: commission,
       totalRemettre: report.isManualTotalRemettre ? report.totalRemettre : calculatedTotalRemettre
@@ -493,7 +526,7 @@ const AdminMonthlyReports: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700 ml-1">Libellé Bailleur</label>
+                    <label className="text-sm font-bold text-gray-700 ml-1">Libellé Bailleur (Signature)</label>
                     <input
                       type="text"
                       className="w-full px-5 py-2 bg-white border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
@@ -519,7 +552,15 @@ const AdminMonthlyReports: React.FC = () => {
                 {showColumnManager && (
                   <div className="mt-4 p-6 bg-blue-50 rounded-3xl border border-blue-100 space-y-4">
                     <h4 className="font-bold text-blue-900">Configuration des colonnes</h4>
-                    <p className="text-xs text-blue-600 mb-4 italic">* La colonne avec l'ID "montantPaye" est utilisée pour le calcul de la commission.</p>
+                    <div className="bg-white/60 p-4 rounded-2xl text-xs text-blue-800 space-y-2 mb-2">
+                      <p className="font-bold">✨ Fonctionnalités Excel :</p>
+                      <ul className="list-disc ml-4 space-y-1">
+                        <li><strong>Formules :</strong> Ajoutez une formule dans une colonne (ex: <code className="bg-blue-100 px-1 rounded">montantLoyer - montantPaye</code>).</li>
+                        <li><strong>Calcul rapide :</strong> Dans le tableau, tapez un calcul (ex: <code className="bg-blue-100 px-1 rounded">5000+2500</code>) puis sortez de la case.</li>
+                        <li><strong>Identifiants :</strong> Utilisez l'ID (ex: <code className="bg-blue-100 px-1 rounded">loyer_123</code>) pour vos formules.</li>
+                      </ul>
+                    </div>
+                    <p className="text-[10px] text-blue-600 italic">* La colonne avec l'ID "montantPaye" est utilisée pour le calcul de la commission.</p>
                     <div className="space-y-2">
                       {newReport.columns.map((col, index) => (
                         <div key={col.id} className="flex items-center gap-2 bg-white p-3 rounded-xl shadow-sm">
@@ -556,6 +597,19 @@ const AdminMonthlyReports: React.FC = () => {
                               onChange={(e) => {
                                 const updated = [...newReport.columns];
                                 updated[index].suffix = e.target.value;
+                                setNewReport({ ...newReport, columns: updated });
+                              }}
+                            />
+                          )}
+                          {col.type === 'number' && (
+                            <input
+                              type="text"
+                              className="w-24 bg-gray-50 border-none rounded-lg text-xs px-2 py-1"
+                              value={col.formula || ''}
+                              placeholder="Formule (ex: col_id + 50)"
+                              onChange={(e) => {
+                                const updated = [...newReport.columns];
+                                updated[index].formula = e.target.value;
                                 setNewReport({ ...newReport, columns: updated });
                               }}
                             />
@@ -686,18 +740,40 @@ const AdminMonthlyReports: React.FC = () => {
                             {newReport.columns.map(col => (
                               <td key={col.id} className="px-4 py-2">
                                 <input
-                                  type={col.type === 'number' ? 'number' : 'text'}
-                                  className={`w-full bg-white/50 border border-transparent hover:border-blue-200 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 rounded-xl px-3 py-2 transition-all ${col.type === 'number' ? 'text-right font-mono font-bold text-blue-900' : 'text-gray-700'}`}
+                                  type="text"
+                                  className={`w-full border border-transparent hover:border-blue-200 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 rounded-xl px-3 py-2 transition-all ${
+                                    col.type === 'number' ? 'text-right font-mono font-bold text-blue-900' : 'text-gray-700'
+                                  } ${col.formula ? 'bg-gray-100 cursor-not-allowed opacity-80' : 'bg-white/50'}`}
                                   value={item[col.id] ?? (col.type === 'number' ? 0 : '')}
+                                  readOnly={!!col.formula}
+                                  placeholder={col.formula ? `[Calculé]` : ''}
                                   onChange={(e) => {
                                     const updatedItems = [...newReport.items];
                                     const rawVal = e.target.value;
-                                    const val = col.type === 'number' ? (rawVal === '' ? '' : parseFloat(rawVal)) : rawVal;
                                     updatedItems[idx] = { 
                                       ...updatedItems[idx], 
-                                      [col.id]: val
+                                      [col.id]: rawVal
                                     };
-                                    setNewReport(updateReportTotals({ ...newReport, items: updatedItems }));
+                                    setNewReport({ ...newReport, items: updatedItems });
+                                  }}
+                                  onBlur={(e) => {
+                                    if (col.type === 'number' && !col.formula) {
+                                      const rawVal = e.target.value;
+                                      let finalVal: any = rawVal;
+                                      
+                                      // If it contains math operators, evaluate it
+                                      if (rawVal && (rawVal.includes('+') || rawVal.includes('-') || rawVal.includes('*') || rawVal.includes('/'))) {
+                                        finalVal = evaluateFormula(rawVal, {});
+                                      } else {
+                                        finalVal = rawVal === '' ? '' : parseFloat(rawVal) || 0;
+                                      }
+                                      
+                                      const updatedItems = [...newReport.items];
+                                      updatedItems[idx] = { ...updatedItems[idx], [col.id]: finalVal };
+                                      setNewReport(updateReportTotals({ ...newReport, items: updatedItems }));
+                                    } else {
+                                      setNewReport(updateReportTotals(newReport));
+                                    }
                                   }}
                                 />
                               </td>
