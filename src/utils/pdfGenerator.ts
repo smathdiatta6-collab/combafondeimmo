@@ -106,7 +106,7 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     doc.setFontSize(10);
     doc.setFont('times', 'bold');
     doc.setTextColor(0, 33, 94);
-    doc.text('Tél : 77 551 96 83', pageWidth / 2, currentY, { align: 'center' });
+    doc.text('Tél : 77 551 96 83 - Cité Bata - Rufisque', pageWidth / 2, currentY, { align: 'center' });
     doc.setTextColor(0);
 
     // Total Amount (Clearly separated)
@@ -182,8 +182,24 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     
     const formattedDate = receipt.date ? new Date(receipt.date).toLocaleDateString('fr-FR') : '...... / ...... / 20......';
     doc.setFont('times', 'normal');
-    currentY += 10;
+    currentY += 12;
+
+    // Reset font for the date line first
+    doc.setFontSize(12);
+    doc.setFont('times', 'normal');
     doc.text(`Fait à Rufisque, le ${formattedDate}`, pageWidth - margin - 10, currentY, { align: 'right' });
+
+    currentY += 8; // Add space between date and NOTA
+
+    // Add NOTA text on the left in smaller font
+    doc.setFontSize(6.5);
+    doc.setFont('times', 'italic');
+    const notaText = "NOTA : un locataire peut déménager :\n" +
+      "1. Qu'il n'ait justifié au propriétaire par une quittance du percepteur qu'il a acquitté toutes ses conditions personnelles et immobilières de l'année courante.\n" +
+      "2. Qu'il n'ait donné ou reçu congé par écrit dans les délais prescrits.\n" +
+      "3. Qu'il n'ait fait faire toutes les réparations locatives à sa charge suivant l'usage ou d'après l'état des lieux s'il en existe un, il ne pourra sous louer en tout ou en partie les locaux cédés sans le consentement du propriétaire.";
+    const splitNota = doc.splitTextToSize(notaText, 75);
+    doc.text(splitNota, mainX, currentY);
     
     doc.save(`Quittance_${receipt.clientName || 'Client'}_${receipt.date || 'Date'}.pdf`);
   } catch (error) {
@@ -208,7 +224,7 @@ export const generateContractPDF = (contract: any) => {
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 33, 94);
-    doc.text('Tél : 77 551 96 83', pageWidth / 2, y, { align: 'center' });
+    doc.text('Tél : 77 551 96 83 - Cité Bata - Rufisque', pageWidth / 2, y, { align: 'center' });
     y += 10;
 
     // Agency Subtitle
@@ -388,10 +404,9 @@ export const generateMonthlyReportPDF = (report: any) => {
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 33, 94);
-    doc.text('Tél : 77 551 96 83', 105, 32, { align: 'center' });
+    doc.text('Tél : 77 551 96 83 - Cité Bata - Rufisque', 105, 32, { align: 'center' });
     
     doc.setFontSize(14);
-    doc.setTextColor(0);
     doc.text(`Chez : ${report.chez || '...'}`, 20, 48);
     doc.text(`Mois : ${report.mois || '...'}`, 150, 48);
     
@@ -488,11 +503,13 @@ export const generateMonthlyReportPDF = (report: any) => {
     const splitArrete = doc.splitTextToSize(arreteText, 170);
     doc.text(splitArrete, 20, finalY + 15);
     
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     const pageWidth = doc.internal.pageSize.getWidth();
     const formattedReportDate = report.date ? new Date(report.date).toLocaleDateString('fr-FR') : '...';
     doc.text(`Fait à Rufisque, le ${formattedReportDate}`, pageWidth - 20, finalY + 30, { align: 'right' });
     
+    doc.setFont('helvetica', 'bold');
     doc.text(report.managerTitle || 'La Gérante', 40, finalY + 45);
     doc.text(report.bailleurLabel || 'Le BAILLEUR', 140, finalY + 45);
     
