@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { FileBarChart, Trash2, Plus, ArrowLeft, Download, UserPlus, X, Edit2, Search, Copy, Settings, ChevronUp, ChevronDown, Receipt } from 'lucide-react';
+import { FileBarChart, Trash2, Plus, ArrowLeft, Download, UserPlus, X, Edit2, Search, Copy, Settings, ChevronUp, ChevronDown, Receipt, FileText } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { generateMonthlyReportPDF } from '../utils/pdfGenerator';
+import { generateMonthlyReportWord } from '../utils/wordGenerator';
 import { numberToWordsFrench } from '../utils/numberToWords';
 import Logo from '../components/Logo';
 import Modal from '../components/Modal';
@@ -57,6 +58,14 @@ const AdminMonthlyReports: React.FC = () => {
     reportCurrency: ' FCFA',
     title: 'BILAN MENSUEL',
     isManualTotalRemettre: false,
+    isManualCommission: false,
+    commissionInWords: false,
+    commissionWords: '',
+    forceOnePage: false,
+    hideTotalRemettre: false,
+    hideSignatures: false,
+    hideArrete: false,
+    hideFooter: false,
     managerTitle: 'La Gérante',
     bailleurLabel: 'Le BAILLEUR'
   });
@@ -109,13 +118,16 @@ const AdminMonthlyReports: React.FC = () => {
     const totalPaye = newReport.items.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0);
     const commission = Math.round(totalPaye * (newReport.commissionPercentage / 100));
     const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
-    const aRemettre = totalPaye - commission - totalCustom;
+    const effectiveCommission = newReport.hideCommission ? 0 : commission;
+    const aRemettre = totalPaye - effectiveCommission - totalCustom;
     
     setNewReport(prev => ({
       ...prev,
       totalPaye: totalPaye,
       totalCommission: commission,
-      totalRemettre: aRemettre
+      totalRemettre: aRemettre,
+      isManualTotalRemettre: false,
+      isManualCommission: false
     }));
   };
 
@@ -160,14 +172,14 @@ const AdminMonthlyReports: React.FC = () => {
     const commission = Math.round(totalPaye * (report.commissionPercentage / 100));
     const totalCustom = (report.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
     
-    const effectiveCommission = report.hideCommission ? 0 : commission;
+    const effectiveCommission = report.hideCommission ? 0 : (report.isManualCommission ? report.totalCommission : commission);
     const calculatedTotalRemettre = totalPaye - effectiveCommission - totalCustom;
     
     return {
       ...report,
       items: updatedItems,
       totalPaye,
-      totalCommission: commission,
+      totalCommission: report.isManualCommission ? report.totalCommission : commission,
       totalRemettre: report.isManualTotalRemettre ? report.totalRemettre : calculatedTotalRemettre
     };
   };
@@ -313,6 +325,14 @@ const AdminMonthlyReports: React.FC = () => {
         hideCommission: false,
         title: 'BILAN MENSUEL',
         isManualTotalRemettre: false,
+        isManualCommission: false,
+        commissionInWords: false,
+        commissionWords: '',
+        forceOnePage: false,
+        hideTotalRemettre: false,
+        hideSignatures: false,
+        hideArrete: false,
+        hideFooter: false,
         managerTitle: 'La Gérante',
         bailleurLabel: 'Le BAILLEUR'
       });
@@ -347,6 +367,14 @@ const AdminMonthlyReports: React.FC = () => {
       reportCurrency: report.reportCurrency || ' FCFA',
       title: report.title || 'BILAN MENSUEL',
       isManualTotalRemettre: !!report.isManualTotalRemettre,
+      isManualCommission: !!report.isManualCommission,
+      commissionInWords: !!report.commissionInWords,
+      commissionWords: report.commissionWords || '',
+      forceOnePage: !!report.forceOnePage,
+      hideTotalRemettre: !!report.hideTotalRemettre,
+      hideSignatures: !!report.hideSignatures,
+      hideArrete: !!report.hideArrete,
+      hideFooter: !!report.hideFooter,
       managerTitle: report.managerTitle || 'La Gérante',
       bailleurLabel: report.bailleurLabel || 'Le BAILLEUR'
     });
@@ -373,6 +401,14 @@ const AdminMonthlyReports: React.FC = () => {
       reportCurrency: report.reportCurrency || ' FCFA',
       title: report.title || 'BILAN MENSUEL',
       isManualTotalRemettre: !!report.isManualTotalRemettre,
+      isManualCommission: !!report.isManualCommission,
+      commissionInWords: !!report.commissionInWords,
+      commissionWords: report.commissionWords || '',
+      forceOnePage: !!report.forceOnePage,
+      hideTotalRemettre: !!report.hideTotalRemettre,
+      hideSignatures: !!report.hideSignatures,
+      hideArrete: !!report.hideArrete,
+      hideFooter: !!report.hideFooter,
       managerTitle: report.managerTitle || 'La Gérante',
       bailleurLabel: report.bailleurLabel || 'Le BAILLEUR'
     });
@@ -429,13 +465,31 @@ const AdminMonthlyReports: React.FC = () => {
                 setNewReport({
                   chez: '',
                   mois: `${months[new Date().getMonth()]} ${new Date().getFullYear()}`,
+                  columns: defaultColumns,
                   items: [],
+                  totalPaye: 0,
                   totalCommission: 0,
                   totalRemettre: 0,
                   commissionPercentage: 10,
                   arreteSomme: '',
                   date: new Date().toISOString().split('T')[0],
-                  villaNumber: ''
+                  villaNumber: '',
+                  customRows: [],
+                  hideTotalPaye: false,
+                  hideCommission: false,
+                  reportCurrency: ' FCFA',
+                  title: 'BILAN MENSUEL',
+                  isManualTotalRemettre: false,
+                  isManualCommission: false,
+                  commissionInWords: false,
+                  commissionWords: '',
+                  forceOnePage: false,
+                  hideTotalRemettre: false,
+                  hideSignatures: false,
+                  hideArrete: false,
+                  hideFooter: false,
+                  managerTitle: 'La Gérante',
+                  bailleurLabel: 'Le BAILLEUR'
                 });
               }
               setIsAdding(!isAdding);
@@ -485,6 +539,14 @@ const AdminMonthlyReports: React.FC = () => {
               reportCurrency: ' FCFA',
               title: 'BILAN MENSUEL',
               isManualTotalRemettre: false,
+              isManualCommission: false,
+              commissionInWords: false,
+              commissionWords: '',
+              forceOnePage: false,
+              hideTotalRemettre: false,
+              hideSignatures: false,
+              hideArrete: false,
+              hideFooter: false,
               managerTitle: 'La Gérante',
               bailleurLabel: 'Le BAILLEUR'
             });
@@ -841,6 +903,69 @@ const AdminMonthlyReports: React.FC = () => {
                   />
                   <span className="text-sm font-medium text-green-700 font-bold">Saisie manuelle Total à Remettre</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.isManualCommission}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, isManualCommission: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-blue-700 font-bold">Saisie manuelle Commission</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.commissionInWords}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, commissionInWords: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium text-indigo-700 font-bold">Commission en toutes lettres</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-orange-50 px-4 py-2 rounded-xl hover:bg-orange-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.forceOnePage}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, forceOnePage: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                  />
+                  <span className="text-sm font-medium text-orange-700 font-bold italic">Forcer une seule page</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-red-50 px-4 py-2 rounded-xl hover:bg-red-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.hideTotalRemettre}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, hideTotalRemettre: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-sm font-medium text-red-700 font-bold">Masquer Total à Remettre</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-gray-100 px-4 py-2 rounded-xl hover:bg-gray-200 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.hideSignatures}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, hideSignatures: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700 font-bold">Masquer Signatures</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-amber-50 px-4 py-2 rounded-xl hover:bg-amber-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.hideArrete}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, hideArrete: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  <span className="text-sm font-medium text-amber-700 font-bold">Masquer Arrêté à la somme</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-4 py-2 rounded-xl hover:bg-slate-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.hideFooter}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, hideFooter: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-slate-600 focus:ring-slate-500"
+                  />
+                  <span className="text-sm font-medium text-slate-700 font-bold">Masquer Pied de page</span>
+                </label>
                 <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-xl">
                   <span className="text-sm font-medium text-gray-700">Devise :</span>
                   <input
@@ -914,21 +1039,67 @@ const AdminMonthlyReports: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-gray-700 ml-1">Commission ({newReport.commissionPercentage}%)</label>
                     <div className="relative">
-                      <input
-                        type="number"
-                        className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-700"
-                        value={newReport.totalCommission || 0}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0;
-                          const totalPaye = newReport.totalPaye || 0;
-                          const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
-                          setNewReport({ 
-                            ...newReport, 
-                            totalCommission: val,
-                            totalRemettre: totalPaye - val - totalCustom
-                          });
-                        }}
-                      />
+                      {newReport.commissionInWords ? (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            className="w-full px-5 py-4 bg-indigo-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-indigo-700 ring-2 ring-indigo-100"
+                            value={newReport.commissionWords || ''}
+                            placeholder="Entrez la commission en lettres (ex: OFFERT, Dix pour cent...)"
+                            onChange={(e) => {
+                              setNewReport({ ...newReport, commissionWords: e.target.value });
+                            }}
+                          />
+                          {newReport.isManualCommission && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-xs font-bold text-gray-500">Valeur numérique pour calcul :</span>
+                              <input
+                                type="number"
+                                className="w-32 px-3 py-1 bg-blue-50 border-none rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-700 text-sm"
+                                value={newReport.totalCommission || 0}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  const totalPaye = newReport.totalPaye || 0;
+                                  const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+                                  const currentManualTotalRemettre = newReport.isManualTotalRemettre;
+                                  setNewReport({ 
+                                    ...newReport, 
+                                    totalCommission: val,
+                                    totalRemettre: currentManualTotalRemettre ? newReport.totalRemettre : totalPaye - val - totalCustom
+                                  });
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          type="number"
+                          className={`w-full px-5 py-4 border-none rounded-2xl focus:ring-2 outline-none transition-all font-bold text-blue-700 ${
+                            newReport.isManualCommission 
+                            ? 'bg-blue-50 focus:ring-blue-500 ring-2 ring-blue-100' 
+                            : 'bg-gray-50 focus:ring-blue-500'
+                          }`}
+                          value={newReport.totalCommission || 0}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const totalPaye = newReport.totalPaye || 0;
+                            const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+                            const currentManualTotalRemettre = newReport.isManualTotalRemettre;
+                            setNewReport({ 
+                              ...newReport, 
+                              totalCommission: val,
+                              totalRemettre: currentManualTotalRemettre ? newReport.totalRemettre : totalPaye - val - totalCustom
+                            });
+                          }}
+                        />
+                      )}
+                      {!newReport.commissionInWords && newReport.isManualCommission && (
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] bg-blue-200 text-blue-800 px-2 py-1 rounded-lg uppercase font-black">Manuel</span>
+                      )}
+                      {newReport.commissionInWords && (
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] bg-indigo-200 text-indigo-800 px-2 py-1 rounded-lg uppercase font-black">Lettres</span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1098,6 +1269,7 @@ const AdminMonthlyReports: React.FC = () => {
                     setNewReport({
                       chez: '',
                       mois: `${months[new Date().getMonth()]} ${new Date().getFullYear()}`,
+                      columns: defaultColumns,
                       items: [],
                       totalPaye: 0,
                       totalCommission: 0,
@@ -1106,10 +1278,19 @@ const AdminMonthlyReports: React.FC = () => {
                       arreteSomme: '',
                       date: new Date().toISOString().split('T')[0],
                       villaNumber: '',
+                      customRows: [],
                       hideTotalPaye: false,
                       hideCommission: false,
                       title: 'BILAN MENSUEL',
                       isManualTotalRemettre: false,
+                      isManualCommission: false,
+                      commissionInWords: false,
+                      commissionWords: '',
+                      forceOnePage: false,
+                      hideTotalRemettre: false,
+                      hideSignatures: false,
+                      hideArrete: false,
+                      hideFooter: false,
                       managerTitle: 'La Gérante',
                       bailleurLabel: 'Le BAILLEUR'
                     });
@@ -1153,6 +1334,13 @@ const AdminMonthlyReports: React.FC = () => {
                       <Download size={20} />
                     </button>
                     <button
+                      onClick={() => generateMonthlyReportWord(report)}
+                      className="text-gray-400 hover:text-blue-600 transition-colors"
+                      title="Télécharger Word"
+                    >
+                      <FileText size={20} />
+                    </button>
+                    <button
                       onClick={() => handleDeleteReport(report.id)}
                       className="text-gray-400 hover:text-red-600 transition-colors"
                     >
@@ -1163,7 +1351,7 @@ const AdminMonthlyReports: React.FC = () => {
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">Chez {report.chez}</h3>
                 <p className="text-orange-600 font-bold text-sm mb-4">{report.mois}</p>
                 <div className="space-y-2 text-sm text-gray-500">
-                  <p>Commission: {formatAmount(report.totalCommission)} FCFA</p>
+                  <p>Commission: {report.commissionInWords ? <span className="text-indigo-600 font-bold italic">"{report.commissionWords}"</span> : `${formatAmount(report.totalCommission)} FCFA`}</p>
                   <p>À remettre: {formatAmount(report.totalRemettre)} FCFA</p>
                   <p>Date: {report.date}</p>
                 </div>
@@ -1174,6 +1362,12 @@ const AdminMonthlyReports: React.FC = () => {
                   className="w-full text-blue-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
                 >
                   Télécharger Bilan PDF <Download size={16} />
+                </button>
+                <button
+                  onClick={() => generateMonthlyReportWord(report)}
+                  className="w-full text-blue-800 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
+                >
+                  Télécharger Bilan Word <FileText size={16} />
                 </button>
                 <button
                   onClick={() => handleGenerateReceipts(report)}

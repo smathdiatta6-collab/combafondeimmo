@@ -397,21 +397,25 @@ export const generateMonthlyReportPDF = (report: any) => {
     const doc = new jsPDF();
     
     // Header with Logo
-    const logoScale = 0.5;
+    const isOnePage = !!report.forceOnePage;
+    const reportCurrency = report.reportCurrency !== undefined ? report.reportCurrency : ' FCFA';
+    
+    // Header
+    const logoScale = isOnePage ? 0.4 : 0.5;
     const logoWidth = 60 * logoScale;
     drawLogo(doc, (210 - logoWidth) / 2, 10, logoScale);
     
-    doc.setFontSize(12);
+    doc.setFontSize(isOnePage ? 10 : 12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 33, 94);
-    doc.text('Tél : 77 551 96 83 - Cité Bata - Rufisque', 105, 32, { align: 'center' });
+    doc.text('Tél : 77 551 96 83 - Cité Bata - Rufisque', 105, isOnePage ? 28 : 32, { align: 'center' });
     
-    doc.setFontSize(14);
-    doc.text(`Chez : ${report.chez || '...'}`, 20, 48);
-    doc.text(`Mois : ${report.mois || '...'}`, 150, 48);
+    doc.setFontSize(isOnePage ? 12 : 14);
+    doc.text(`Chez : ${report.chez || '...'}`, 20, isOnePage ? 40 : 48);
+    doc.text(`Mois : ${report.mois || '...'}`, 150, isOnePage ? 40 : 48);
     
-    doc.setFontSize(16);
-    doc.text(report.title || 'BILAN MENSUEL', 105, 63, { align: 'center' });
+    doc.setFontSize(isOnePage ? 14 : 16);
+    doc.text(report.title || 'BILAN MENSUEL', 105, isOnePage ? 53 : 63, { align: 'center' });
     
     // Table
     const columns = report.columns || [
@@ -435,7 +439,6 @@ export const generateMonthlyReportPDF = (report: any) => {
     // Add totals as rows in the table
     const totalPaye = report.totalPaye !== undefined ? report.totalPaye : (report.items || []).reduce((sum: number, item: any) => sum + (Number(item.montantPaye) || 0), 0);
     const colSpan = Math.max(1, columns.length - 2);
-    const reportCurrency = report.reportCurrency !== undefined ? report.reportCurrency : ' FCFA';
     
     if (!report.hideTotalPaye) {
       tableBody.push([
@@ -445,9 +448,13 @@ export const generateMonthlyReportPDF = (report: any) => {
     }
 
     if (!report.hideCommission) {
+      const commissionContent = report.commissionInWords 
+        ? report.commissionWords || '' 
+        : `${safeToLocaleString(report.totalCommission)}${reportCurrency}`;
+        
       tableBody.push([
         { content: 'Commission', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
-        { content: `${safeToLocaleString(report.totalCommission)}${reportCurrency}`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+        { content: commissionContent, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
       ]);
     }
 
@@ -464,13 +471,15 @@ export const generateMonthlyReportPDF = (report: any) => {
       });
     }
 
-    tableBody.push([
-      { content: 'Total à remettre', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: `${safeToLocaleString(report.totalRemettre)}${reportCurrency}`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
-    ]);
+    if (!report.hideTotalRemettre) {
+      tableBody.push([
+        { content: 'Total à remettre', colSpan: colSpan, styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: `${safeToLocaleString(report.totalRemettre)}${reportCurrency}`, colSpan: columns.length - colSpan, styles: { fontStyle: 'bold' } }
+      ]);
+    }
 
     autoTable(doc, {
-      startY: 65,
+      startY: isOnePage ? 58 : 65,
       head: tableHead,
       body: tableBody,
       theme: 'grid',
@@ -482,8 +491,8 @@ export const generateMonthlyReportPDF = (report: any) => {
         lineColor: [0, 0, 0]
       },
       styles: { 
-        fontSize: 10, 
-        cellPadding: 3,
+        fontSize: isOnePage ? 8 : 10, 
+        cellPadding: isOnePage ? 2 : 3,
         lineWidth: 0.5,
         lineColor: [0, 0, 0]
       },
@@ -496,24 +505,51 @@ export const generateMonthlyReportPDF = (report: any) => {
     });
     
     const finalY = (doc as any).lastAutoTable.finalY;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    const arreteText = `ARRETE A LA SOMME DE : ${report.arreteSomme || '...'}`;
-    const splitArrete = doc.splitTextToSize(arreteText, 170);
-    doc.text(splitArrete, 20, finalY + 15);
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
+    const pageHeight = doc.internal.pageSize.getHeight();
     const pageWidth = doc.internal.pageSize.getWidth();
+    let currentY = 0;
+    
+    // Check if we need a new page for the final section (Arreté + Date + Signatures)
+    // We need about 60mm of space for a comfortable layout, less if one page forced
+    const requiredSpace = isOnePage ? 40 : 60;
+    
+    if (!isOnePage && finalY + requiredSpace > pageHeight - 20) {
+      addFooter(doc, report.villaNumber);
+      doc.addPage();
+      currentY = 20; 
+    } else {
+      currentY = finalY + (isOnePage ? 8 : 15);
+    }
+    
+    // 1. ARRETE A LA SOMME DE (Centered)
+    if (!report.hideArrete) {
+      doc.setFontSize(isOnePage ? 8 : 10);
+      doc.setFont('helvetica', 'bold');
+      const arreteText = `ARRETE A LA SOMME DE : ${report.arreteSomme || '...'}`;
+      const splitArrete = doc.splitTextToSize(arreteText, 180);
+      doc.text(splitArrete, pageWidth / 2, currentY, { align: 'center' });
+      
+      currentY += (splitArrete.length * (isOnePage ? 4 : 6)) + (isOnePage ? 3 : 8);
+    }
+    
+    // 2. Fait à Rufisque (Date)
+    doc.setFontSize(isOnePage ? 7.5 : 9.5);
+    doc.setFont('helvetica', 'normal');
     const formattedReportDate = report.date ? new Date(report.date).toLocaleDateString('fr-FR') : '...';
-    doc.text(`Fait à Rufisque, le ${formattedReportDate}`, pageWidth - 20, finalY + 30, { align: 'right' });
+    doc.text(`Fait à Rufisque, le ${formattedReportDate}`, pageWidth - 20, currentY, { align: 'right' });
     
-    doc.setFont('helvetica', 'bold');
-    doc.text(report.managerTitle || 'La Gérante', 40, finalY + 45);
-    doc.text(report.bailleurLabel || 'Le BAILLEUR', 140, finalY + 45);
+    currentY += isOnePage ? 10 : 15;
     
-    addFooter(doc, report.villaNumber);
+    // 3. Signatures
+    if (!report.hideSignatures) {
+      doc.setFont('helvetica', 'bold');
+      doc.text(report.managerTitle || 'La Gérante', 40, currentY);
+      doc.text(report.bailleurLabel || 'Le BAILLEUR', 140, currentY);
+    }
+    
+    if (!report.hideFooter) {
+      addFooter(doc, report.villaNumber);
+    }
     
     doc.save(`Bilan_${report.chez || 'Bailleur'}_${report.mois || 'Mois'}.pdf`);
   } catch (error) {
