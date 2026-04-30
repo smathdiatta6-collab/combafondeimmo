@@ -149,6 +149,7 @@ const SuperAdminDashboard: React.FC = () => {
               <thead>
                 <tr className="bg-gray-50 text-left">
                   <th className="px-8 py-4 text-sm font-bold text-gray-600">Utilisateur</th>
+                  <th className="px-8 py-4 text-sm font-bold text-gray-600">Demandé par</th>
                   <th className="px-8 py-4 text-sm font-bold text-gray-600">Client</th>
                   <th className="px-8 py-4 text-sm font-bold text-gray-600">Montant</th>
                   <th className="px-8 py-4 text-sm font-bold text-gray-600">Date</th>
@@ -167,6 +168,17 @@ const SuperAdminDashboard: React.FC = () => {
                           <p className="font-bold text-gray-900">{r.createdByName || 'Inconnu'}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      {r.requestedBy ? (
+                        <span className={`px-4 py-2 rounded-xl text-xs font-bold ${
+                          r.requestedBy === 'OMAR' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {r.requestedBy}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300 italic text-xs">Non spécifié</span>
+                      )}
                     </td>
                     <td className="px-8 py-6">
                       <span className="font-medium text-gray-900">{r.clientName}</span>

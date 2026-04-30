@@ -30,7 +30,8 @@ const AdminReceipts: React.FC = () => {
     timbre: 0,
     periodLabel: 'un mois',
     propertyAddress: '',
-    status: 'En attente'
+    status: 'En attente',
+    requestedBy: ''
   });
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -39,6 +40,7 @@ const AdminReceipts: React.FC = () => {
   const [contractsLoaded, setContractsLoaded] = useState(false);
   const [reportToProcess, setReportToProcess] = useState<any>(null);
   const [selectedReportItems, setSelectedReportItems] = useState<number[]>([]);
+  const [bulkRequestedBy, setBulkRequestedBy] = useState('');
 
   useEffect(() => {
     if (user && isAdmin) {
@@ -119,6 +121,7 @@ const AdminReceipts: React.FC = () => {
           periodLabel: `un mois de ${reportToProcess.mois.split(' ')[0]}`,
           propertyAddress: `Cité BATA chez ${reportToProcess.chez}`,
           status: 'En attente',
+          requestedBy: bulkRequestedBy,
           createdByUID: user?.uid,
           createdByName: user?.displayName || user?.email,
           createdAt: new Date().toISOString()
@@ -137,6 +140,7 @@ const AdminReceipts: React.FC = () => {
       alert(`${selectedItems.length} quittances ont été générées avec succès !`);
       setReportToProcess(null);
       setSelectedReportItems([]);
+      setBulkRequestedBy('');
       fetchReceipts();
     } catch (error) {
       console.error('Error generating bulk receipts:', error);
@@ -213,7 +217,8 @@ const AdminReceipts: React.FC = () => {
         timbre: 0,
         periodLabel: 'un mois',
         propertyAddress: '',
-        status: 'En attente'
+        status: 'En attente',
+        requestedBy: ''
       });
       setIsAdding(false);
       setEditingId(null);
@@ -238,7 +243,8 @@ const AdminReceipts: React.FC = () => {
       timbre: receipt.timbre || 0,
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
-      status: receipt.status || 'En attente'
+      status: receipt.status || 'En attente',
+      requestedBy: receipt.requestedBy || ''
     });
     setEditingId(receipt.id);
     setIsAdding(true);
@@ -259,7 +265,8 @@ const AdminReceipts: React.FC = () => {
       timbre: receipt.timbre || 0,
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
-      status: 'En attente'
+      status: 'En attente',
+      requestedBy: receipt.requestedBy || ''
     });
     setEditingId(null);
     setIsAdding(true);
@@ -489,6 +496,19 @@ const AdminReceipts: React.FC = () => {
                 <label htmlFor="select-all" className="font-bold text-gray-700 cursor-pointer">Tout sélectionner</label>
               </div>
 
+              <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100 mb-6">
+                <label className="block text-sm font-bold text-amber-900 mb-2">Demandé par (Pour ce lot)</label>
+                <select
+                  className="w-full px-5 py-4 bg-white border-none rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all appearance-none font-bold text-amber-900"
+                  value={bulkRequestedBy}
+                  onChange={(e) => setBulkRequestedBy(e.target.value)}
+                >
+                  <option value="">-- Sélectionner le demandeur --</option>
+                  <option value="OMAR">OMAR</option>
+                  <option value="MBODJ">MBODJ</option>
+                </select>
+              </div>
+
               {reportToProcess.items.map((item: any, index: number) => (
                 <div 
                   key={index} 
@@ -581,7 +601,8 @@ const AdminReceipts: React.FC = () => {
               timbre: 0,
               periodLabel: 'un mois',
               propertyAddress: '',
-              status: 'En attente'
+              status: 'En attente',
+              requestedBy: ''
             });
           }}
           title={editingId ? 'Modifier la Quittance' : 'Nouvelle Quittance'}
@@ -715,6 +736,18 @@ const AdminReceipts: React.FC = () => {
               >
                 <option value="Payé">Payé (Déjà réglé)</option>
                 <option value="En attente">En attente (À payer plus tard)</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Demandé par (OMAR / MBODJ)</label>
+              <select
+                className="w-full px-5 py-4 bg-amber-50 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all appearance-none font-bold text-amber-900"
+                value={newReceipt.requestedBy}
+                onChange={(e) => setNewReceipt({ ...newReceipt, requestedBy: e.target.value })}
+              >
+                <option value="">-- Sélectionner le demandeur --</option>
+                <option value="OMAR">OMAR</option>
+                <option value="MBODJ">MBODJ</option>
               </select>
             </div>
             <div className="flex gap-4 md:col-span-2 pt-4">
