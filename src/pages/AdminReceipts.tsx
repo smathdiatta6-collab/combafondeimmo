@@ -17,13 +17,25 @@ const AdminReceipts: React.FC = () => {
   const [receipts, setReceipts] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const getPreviousMonthDates = () => {
+    const now = new Date();
+    const firstDayPrev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastDayPrev = new Date(now.getFullYear(), now.getMonth(), 0);
+    return {
+      start: firstDayPrev.toISOString().split('T')[0],
+      end: lastDayPrev.toISOString().split('T')[0]
+    };
+  };
+
+  const prevDates = getPreviousMonthDates();
+
   const [newReceipt, setNewReceipt] = useState({ 
     clientName: '', 
     amount: 0, 
     amountInWords: '',
     date: new Date().toISOString().split('T')[0], 
-    periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+    periodStart: prevDates.start,
+    periodEnd: prevDates.end,
     paymentMethodId: 'Especes', 
     reference: '',
     prestations: 0,
@@ -87,7 +99,8 @@ const AdminReceipts: React.FC = () => {
     let end = '';
     const monthName = Object.keys(months).find(m => reportToProcess.mois?.includes(m));
     if (monthName !== undefined) {
-      const year = new Date().getFullYear();
+      const yearMatch = reportToProcess.mois?.match(/\d{4}/);
+      const year = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
       const monthIndex = months[monthName];
       start = new Date(year, monthIndex, 1).toISOString().split('T')[0];
       end = new Date(year, monthIndex + 1, 0).toISOString().split('T')[0];
@@ -209,8 +222,8 @@ const AdminReceipts: React.FC = () => {
         amount: 0, 
         amountInWords: '',
         date: new Date().toISOString().split('T')[0], 
-        periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-        periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+        periodStart: prevDates.start,
+        periodEnd: prevDates.end,
         paymentMethodId: 'Especes', 
         reference: '',
         prestations: 0,
@@ -380,11 +393,9 @@ const AdminReceipts: React.FC = () => {
       start = startDate.toISOString().split('T')[0];
       end = endDate.toISOString().split('T')[0];
     } else if (label === 'un mois') {
-      const now = new Date();
-      const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      start = startDate.toISOString().split('T')[0];
-      end = endDate.toISOString().split('T')[0];
+      const prev = getPreviousMonthDates();
+      start = prev.start;
+      end = prev.end;
     }
 
     setNewReceipt(prev => ({
@@ -592,8 +603,8 @@ const AdminReceipts: React.FC = () => {
               amount: 0, 
               amountInWords: '',
               date: new Date().toISOString().split('T')[0], 
-              periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-              periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+              periodStart: prevDates.start,
+              periodEnd: prevDates.end,
               contractId: '', 
               paymentMethodId: 'Especes', 
               reference: '',
@@ -762,8 +773,8 @@ const AdminReceipts: React.FC = () => {
                   amount: 0, 
                   amountInWords: '',
                   date: new Date().toISOString().split('T')[0], 
-                  periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-                  periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+                  periodStart: prevDates.start,
+                  periodEnd: prevDates.end,
                   contractId: '', 
                   paymentMethodId: 'Especes', 
                   reference: '',
@@ -771,7 +782,8 @@ const AdminReceipts: React.FC = () => {
                   timbre: 0,
                   periodLabel: 'un mois',
                   propertyAddress: '',
-                  status: 'En attente'
+                  status: 'En attente',
+                  requestedBy: ''
                 });
               }} className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all">
                 Annuler
