@@ -427,10 +427,23 @@ const AdminMonthlyReports: React.FC = () => {
     }
   };
 
-  const filteredReports = reports.filter(report => 
-    report.chez?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    report.mois?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredReports = reports.filter(report => {
+    const searchLower = searchTerm.toLowerCase();
+    
+    // Search in basic report fields (Owner or Month)
+    const basicMatch = 
+      report.chez?.toLowerCase().includes(searchLower) ||
+      report.mois?.toLowerCase().includes(searchLower);
+      
+    if (basicMatch) return true;
+    
+    // Search in all items (Tenants) within the report
+    return (report.items || []).some((item: any) => 
+      Object.values(item).some(val => 
+        val && String(val).toLowerCase().includes(searchLower)
+      )
+    );
+  });
 
   const handleGenerateReceipts = (report: any) => {
     // We'll pass the data via state to the receipts page where the user can select items
@@ -506,7 +519,7 @@ const AdminMonthlyReports: React.FC = () => {
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input
               type="text"
-              placeholder="Rechercher par nom de bailleur ou par mois..."
+              placeholder="Rechercher par bailleur, locataire ou mois..."
               className="w-full pl-14 pr-6 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
