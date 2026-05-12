@@ -411,33 +411,78 @@ export const generateMonthlyReportPDF = (report: any) => {
     doc.text('Tél : 77 551 96 83 - Cité Bata - Rufisque', 105, isOnePage ? 28 : 32, { align: 'center' });
     
     doc.setFontSize(isOnePage ? 12 : 14);
-    doc.text(`Chez : ${report.chez || '...'}`, 20, isOnePage ? 40 : 48);
-    doc.text(`Mois : ${report.mois || '...'}`, 150, isOnePage ? 40 : 48);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Chez : ', 20, isOnePage ? 40 : 48);
+    doc.setFont('times', 'bold');
+    doc.text(report.chez || '...', 35, isOnePage ? 40 : 48);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('Mois : ', 130, isOnePage ? 40 : 48);
+    doc.setFont('times', 'bold');
+    doc.text(report.mois || '...', 145, isOnePage ? 40 : 48);
     
     doc.setFontSize(isOnePage ? 14 : 16);
-    doc.text(report.title || 'BILAN MENSUEL', 105, isOnePage ? 53 : 63, { align: 'center' });
+    if (report.title) {
+      doc.setFont('times', 'bold');
+      doc.text(report.title, 105, isOnePage ? 53 : 63, { align: 'center' });
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.text('BILAN MENSUEL', 105, isOnePage ? 53 : 63, { align: 'center' });
+    }
     
     // Table
     const columns = report.columns || [
       { id: 'prenoms', label: 'Prénoms', type: 'text' },
       { id: 'nom', label: 'Nom', type: 'text' },
-      { id: 'montantLoyer', label: 'Loyer', type: 'number' },
-      { id: 'montantPaye', label: 'Payé', type: 'number' },
-      { id: 'montantNonPaye', label: 'Non Payé', type: 'number' },
+      { id: 'loyer', label: 'Loyer', type: 'number' },
+      { id: 'paye', label: 'Payé', type: 'number' },
+      { id: 'nonPaye', label: 'Non Payé', type: 'number' },
     ];
 
     const tableHead = [columns.map((col: any) => col.label)];
-    const tableBody = (report.items || []).map((item: any) => 
-      columns.map((col: any) => {
+    
+    // Create a 2D array to track which cells are already covered by spans
+    const covered = (report.items || []).map(() => columns.map(() => false));
+    const tableBody: any[] = [];
+
+    (report.items || []).forEach((item: any, rowIdx: number) => {
+      const row: any[] = [];
+      columns.forEach((col: any, colIdx: number) => {
+        if (covered[rowIdx][colIdx]) return; // Skip if covered by a previous span
+
+        const span = item[`_span_${col.id}`] || { rowSpan: 1, colSpan: 1 };
         const val = item[col.id];
         const suffix = col.suffix !== undefined ? col.suffix : (col.type === 'number' ? ' FCFA' : '');
         const formatted = safeToLocaleString(val);
-        return formatted === '' ? '' : `${formatted}${suffix}`;
-      })
-    );
+        const content = formatted === '' ? '' : `${formatted}${suffix}`;
+
+        // Mark covered cells
+        for (let r = 0; r < span.rowSpan; r++) {
+          for (let c = 0; c < span.colSpan; c++) {
+            if (rowIdx + r < covered.length && colIdx + c < covered[0].length) {
+              covered[rowIdx + r][colIdx + c] = true;
+            }
+          }
+        }
+
+        row.push({
+          content: content,
+          rowSpan: span.rowSpan,
+          colSpan: span.colSpan,
+          styles: {
+            halign: report.centerText ? 'center' : (col.type === 'number' ? 'right' : 'left'),
+            font: 'times',
+            textColor: [0, 0, 0]
+          }
+        });
+      });
+      if (row.length > 0) {
+        tableBody.push(row);
+      }
+    });
 
     // Add totals as rows in the table
-    const totalPaye = report.totalPaye !== undefined ? report.totalPaye : (report.items || []).reduce((sum: number, item: any) => sum + (Number(item.montantPaye) || 0), 0);
+    const totalPaye = report.totalPaye !== undefined ? report.totalPaye : (report.items || []).reduce((sum: number, item: any) => sum + (Number(item.paye) || 0), 0);
     const colSpan = Math.max(1, columns.length - 2);
     
     if (!report.hideTotalPaye) {
@@ -478,6 +523,10 @@ export const generateMonthlyReportPDF = (report: any) => {
       ]);
     }
 
+    const tableFontSize = 
+      report.tableFontSize === 'small' ? 8 : 
+      report.tableFontSize === 'large' ? 12 : 10;
+
     autoTable(doc, {
       startY: isOnePage ? 58 : 65,
       head: tableHead,
@@ -485,21 +534,23 @@ export const generateMonthlyReportPDF = (report: any) => {
       theme: 'grid',
       headStyles: { 
         fillColor: [30, 58, 138], 
-        halign: 'center', 
+        halign: report.centerText ? 'center' : 'center', // Keep head centered usually, or follow centerText
+        font: 'helvetica',
         fontStyle: 'bold',
         lineWidth: 0.5,
-        lineColor: [0, 0, 0]
+        lineColor: [0, 0, 0],
+        textColor: [255, 255, 255]
       },
       styles: { 
-        fontSize: isOnePage ? 8 : 10, 
-        cellPadding: isOnePage ? 2 : 3,
+        fontSize: tableFontSize, 
+        cellPadding: report.tableFontSize === 'small' ? 2 : (report.tableFontSize === 'large' ? 5 : 3),
         lineWidth: 0.5,
-        lineColor: [0, 0, 0]
+        lineColor: [0, 0, 0],
+        font: 'helvetica',
+        textColor: [0, 0, 0]
       },
       columnStyles: columns.reduce((acc: any, col: any, idx: number) => {
-        if (col.type === 'number') {
-          acc[idx] = { halign: 'right' };
-        }
+        acc[idx] = { halign: report.centerText ? 'center' : (col.type === 'number' ? 'right' : 'left') };
         return acc;
       }, {})
     });
@@ -524,19 +575,34 @@ export const generateMonthlyReportPDF = (report: any) => {
     // 1. ARRETE A LA SOMME DE (Centered)
     if (!report.hideArrete) {
       doc.setFontSize(isOnePage ? 8 : 10);
-      doc.setFont('helvetica', 'bold');
-      const arreteText = `ARRETE A LA SOMME DE : ${report.arreteSomme || '...'}`;
-      const splitArrete = doc.splitTextToSize(arreteText, 180);
-      doc.text(splitArrete, pageWidth / 2, currentY, { align: 'center' });
+      const label = "ARRETE A LA SOMME DE : ";
+      const value = report.arreteSomme || '...';
       
-      currentY += (splitArrete.length * (isOnePage ? 4 : 6)) + (isOnePage ? 3 : 8);
+      doc.setFont('helvetica', 'bold');
+      const labelWidth = doc.getTextWidth(label);
+      doc.setFont('times', 'bold');
+      const valueWidth = doc.getTextWidth(value);
+      
+      const startX = (pageWidth - (labelWidth + valueWidth)) / 2;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, startX, currentY);
+      doc.setFont('times', 'bold');
+      doc.text(value, startX + labelWidth, currentY);
+      
+      currentY += (isOnePage ? 4 : 6) + (isOnePage ? 3 : 8);
     }
     
     // 2. Fait à Rufisque (Date)
     doc.setFontSize(isOnePage ? 7.5 : 9.5);
-    doc.setFont('helvetica', 'normal');
     const formattedReportDate = report.date ? new Date(report.date).toLocaleDateString('fr-FR') : '...';
-    doc.text(`Fait à Rufisque, le ${formattedReportDate}`, pageWidth - 20, currentY, { align: 'right' });
+    
+    doc.setFont('times', 'normal');
+    doc.text(formattedReportDate, pageWidth - 20, currentY, { align: 'right' });
+    const dateWidth = doc.getTextWidth(formattedReportDate);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.text('Fait à Rufisque, le ', pageWidth - 20 - dateWidth, currentY, { align: 'right' });
     
     currentY += isOnePage ? 10 : 15;
     

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { FileBarChart, Trash2, Plus, ArrowLeft, Download, UserPlus, X, Edit2, Search, Copy, Settings, ChevronUp, ChevronDown, Receipt, FileText } from 'lucide-react';
+import { FileBarChart, Trash2, Plus, Minus, ArrowLeft, Download, UserPlus, X, Edit2, Search, Copy, Settings, ChevronUp, ChevronDown, Receipt, FileText } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { generateMonthlyReportPDF } from '../utils/pdfGenerator';
 import { generateMonthlyReportWord } from '../utils/wordGenerator';
@@ -32,12 +32,17 @@ const AdminMonthlyReports: React.FC = () => {
   const [customRowData, setCustomRowData] = useState({ label: '', value: 0, suffix: ' FCFA' });
   const [editingCustomRowIndex, setEditingCustomRowIndex] = useState<number | null>(null);
   
+  // Selection-based Merge System
+  const [isMergeMode, setIsMergeMode] = useState(false);
+  const [mergeStart, setMergeStart] = useState<{ row: number, colIdx: number } | null>(null);
+  const [mergeEnd, setMergeEnd] = useState<{ row: number, colIdx: number } | null>(null);
+
   const defaultColumns: Column[] = [
     { id: 'prenoms', label: 'Prénoms', type: 'text' },
     { id: 'nom', label: 'Nom', type: 'text' },
-    { id: 'montantLoyer', label: 'Loyer', type: 'number' },
-    { id: 'montantPaye', label: 'Payé', type: 'number' },
-    { id: 'montantNonPaye', label: 'Non Payé', type: 'number' },
+    { id: 'loyer', label: 'Loyer', type: 'number' },
+    { id: 'paye', label: 'Payé', type: 'number' },
+    { id: 'nonPaye', label: 'Non Payé', type: 'number' },
   ];
 
   const [newReport, setNewReport] = useState({
@@ -66,6 +71,8 @@ const AdminMonthlyReports: React.FC = () => {
     hideSignatures: false,
     hideArrete: false,
     hideFooter: false,
+    centerText: false,
+    tableFontSize: 'medium',
     managerTitle: 'La Gérante',
     bailleurLabel: 'Le BAILLEUR'
   });
@@ -115,7 +122,7 @@ const AdminMonthlyReports: React.FC = () => {
   }, [newReport.totalRemettre, newReport.reportCurrency]);
 
   const calculateTotals = () => {
-    const totalPaye = newReport.items.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0);
+    const totalPaye = newReport.items.reduce((sum, item) => sum + (Number(item.paye) || 0), 0);
     const commission = Math.round(totalPaye * (newReport.commissionPercentage / 100));
     const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
     const effectiveCommission = newReport.hideCommission ? 0 : commission;
@@ -168,7 +175,7 @@ const AdminMonthlyReports: React.FC = () => {
       return newItem;
     });
 
-    const totalPaye = updatedItems.reduce((sum, item) => sum + (Number(item.montantPaye) || 0), 0);
+    const totalPaye = updatedItems.reduce((sum, item) => sum + (Number(item.paye) || 0), 0);
     const commission = Math.round(totalPaye * (report.commissionPercentage / 100));
     const totalCustom = (report.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
     
@@ -221,24 +228,120 @@ const AdminMonthlyReports: React.FC = () => {
         initialItem[col.id] = col.type === 'number' ? 0 : '';
       }
     });
-    setNewReport(updateReportTotals({
-      ...newReport,
-      items: [...newReport.items, initialItem]
+    setNewReport(prev => updateReportTotals({
+      ...prev,
+      items: [...prev.items, initialItem]
     }));
   };
 
   const handleDuplicateRow = (index: number) => {
     const itemToDuplicate = { ...newReport.items[index] };
-    setNewReport(updateReportTotals({
-      ...newReport,
-      items: [...newReport.items, itemToDuplicate]
+    setNewReport(prev => updateReportTotals({
+      ...prev,
+      items: [...prev.items, itemToDuplicate]
     }));
   };
 
   const handleRemoveItem = (index: number) => {
+    if (window.confirm("Voulez-vous supprimer cette ligne ?")) {
+      setNewReport(prev => {
+        const updatedItems = [...prev.items];
+        updatedItems.splice(index, 1);
+        return updateReportTotals({ ...prev, items: updatedItems });
+      });
+    }
+  };
+
+  const handleSetSpan = (rowIdx: number, colId: string, rowSpan: number, colSpan: number) => {
     const updatedItems = [...newReport.items];
-    updatedItems.splice(index, 1);
-    setNewReport(updateReportTotals({ ...newReport, items: updatedItems }));
+    const item = { ...updatedItems[rowIdx] };
+    const spanKey = `_span_${colId}`;
+    
+    if (rowSpan === 1 && colSpan === 1) {
+      delete item[spanKey];
+    } else {
+      item[spanKey] = { rowSpan, colSpan };
+    }
+    
+    updatedItems[rowIdx] = item;
+    setNewReport({ ...newReport, items: updatedItems });
+  };
+
+  const handleCellClickForMerge = (rowIdx: number, colIdx: number) => {
+    if (!isMergeMode) return;
+
+    if (!mergeStart) {
+      setMergeStart({ row: rowIdx, colIdx });
+      setMergeEnd({ row: rowIdx, colIdx });
+    } else {
+      // Perform the merge
+      const startRow = Math.min(mergeStart.row, rowIdx);
+      const endRow = Math.max(mergeStart.row, rowIdx);
+      const startCol = Math.min(mergeStart.colIdx, colIdx);
+      const endCol = Math.max(mergeStart.colIdx, colIdx);
+
+      const rowSpan = endRow - startRow + 1;
+      const colSpan = endCol - startCol + 1;
+
+      const updatedItems = [...newReport.items];
+      
+      // 1. Clear any existing spans in the entire range
+      for (let r = startRow; r <= endRow; r++) {
+        const item = { ...updatedItems[r] };
+        for (let c = startCol; c <= endCol; c++) {
+          const colId = newReport.columns[c].id;
+          delete item[`_span_${colId}`];
+        }
+        updatedItems[r] = item;
+      }
+
+      // 2. Set the span on the top-left cell
+      const topLeftColId = newReport.columns[startCol].id;
+      updatedItems[startRow] = {
+        ...updatedItems[startRow],
+        [`_span_${topLeftColId}`]: { rowSpan, colSpan }
+      };
+
+      setNewReport({ ...newReport, items: updatedItems });
+      
+      // Cleanup
+      setMergeStart(null);
+      setMergeEnd(null);
+      setIsMergeMode(false);
+    }
+  };
+
+  const isCellSelected = (rowIdx: number, colIdx: number) => {
+    if (!mergeStart || !mergeEnd) return false;
+    const startRow = Math.min(mergeStart.row, mergeEnd.row);
+    const endRow = Math.max(mergeStart.row, mergeEnd.row);
+    const startCol = Math.min(mergeStart.colIdx, mergeEnd.colIdx);
+    const endCol = Math.max(mergeStart.colIdx, mergeEnd.colIdx);
+
+    return rowIdx >= startRow && rowIdx <= endRow && colIdx >= startCol && colIdx <= endCol;
+  };
+
+  const handleRemoveColumn = (colId: string) => {
+    if (newReport.columns.length <= 1) {
+      alert("Vous ne pouvez pas supprimer la dernière colonne.");
+      return;
+    }
+    if (window.confirm("Voulez-vous supprimer cette colonne ? Toutes les données associées à cette colonne seront perdues (uniquement pour ce bilan).")) {
+      setNewReport(prev => {
+        const updatedColumns = prev.columns.filter(c => c.id !== colId);
+        const updatedItems = prev.items.map(item => {
+          const newItem = { ...item };
+          delete newItem[colId];
+          delete newItem[`_span_${colId}`];
+          return newItem;
+        });
+        return updateReportTotals({ 
+          ...prev, 
+          columns: updatedColumns, 
+          items: updatedItems 
+        });
+      });
+    }
   };
 
   const handleAddCustomRow = () => {
@@ -271,9 +374,11 @@ const AdminMonthlyReports: React.FC = () => {
   };
 
   const handleRemoveCustomRow = (index: number) => {
-    const updated = [...(newReport.customRows || [])];
-    updated.splice(index, 1);
-    setNewReport(updateReportTotals({ ...newReport, customRows: updated }));
+    setNewReport(prev => {
+      const updated = [...(prev.customRows || [])];
+      updated.splice(index, 1);
+      return updateReportTotals({ ...prev, customRows: updated });
+    });
     if (editingCustomRowIndex === index) {
       setEditingCustomRowIndex(null);
       setCustomRowData({ label: '', value: 0, suffix: ' FCFA' });
@@ -375,6 +480,8 @@ const AdminMonthlyReports: React.FC = () => {
       hideSignatures: !!report.hideSignatures,
       hideArrete: !!report.hideArrete,
       hideFooter: !!report.hideFooter,
+      centerText: !!report.centerText,
+      tableFontSize: report.tableFontSize || 'medium',
       managerTitle: report.managerTitle || 'La Gérante',
       bailleurLabel: report.bailleurLabel || 'Le BAILLEUR'
     });
@@ -409,6 +516,8 @@ const AdminMonthlyReports: React.FC = () => {
       hideSignatures: !!report.hideSignatures,
       hideArrete: !!report.hideArrete,
       hideFooter: !!report.hideFooter,
+      centerText: !!report.centerText,
+      tableFontSize: report.tableFontSize || 'medium',
       managerTitle: report.managerTitle || 'La Gérante',
       bailleurLabel: report.bailleurLabel || 'Le BAILLEUR'
     });
@@ -417,11 +526,18 @@ const AdminMonthlyReports: React.FC = () => {
   };
 
   const handleDeleteReport = async (id: string) => {
-    if (window.confirm('Voulez-vous vraiment supprimer ce bilan ?')) {
+    if (window.confirm('Voulez-vous vraiment supprimer ce bilan définitivement ?')) {
+      // Functional update to local state for immediate feedback
+      setReports(prev => prev.filter(r => r.id !== id));
+      
       try {
         await deleteDoc(doc(db, 'monthlyReports', id));
-        fetchReports();
+        // Optionally re-fetch to ensure sync, but optimistic delete is better UI
+        // fetchReports(); 
       } catch (error) {
+        console.error("Error deleting report:", error);
+        // Revert on error
+        fetchReports();
         handleFirestoreError(error, OperationType.DELETE, `monthlyReports/${id}`);
       }
     }
@@ -501,6 +617,8 @@ const AdminMonthlyReports: React.FC = () => {
                   hideSignatures: false,
                   hideArrete: false,
                   hideFooter: false,
+                  centerText: false,
+                  tableFontSize: 'medium',
                   managerTitle: 'La Gérante',
                   bailleurLabel: 'Le BAILLEUR'
                 });
@@ -799,61 +917,141 @@ const AdminMonthlyReports: React.FC = () => {
                 </h4>
                 
                 {newReport.items.length > 0 ? (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-xl border border-blue-900/10">
                     <table className="w-full text-left">
                       <thead>
-                        <tr className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        <tr className={`font-bold bg-blue-900 text-white uppercase tracking-wider ${
+                          newReport.tableFontSize === 'small' ? 'text-[9px]' : 
+                          newReport.tableFontSize === 'large' ? 'text-xs' : 'text-[10px]'
+                        }`}>
                           {newReport.columns.map(col => (
-                            <th key={col.id} className="px-4 py-2">{col.label}</th>
+                            <th key={col.id} className={`px-4 py-3 group/header border-r border-white/10 ${newReport.centerText ? 'text-center' : ''}`}>
+                              <div className={`flex flex-col gap-1 ${newReport.centerText ? 'items-center' : ''}`}>
+                                <span>{col.label}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveColumn(col.id)}
+                                  className="hidden group-hover/header:flex items-center justify-center text-red-400 hover:text-red-600 self-start transition-all"
+                                  title="Supprimer la colonne"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </th>
                           ))}
                           <th className="px-4 py-2 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {newReport.items.map((item, idx) => (
-                          <tr key={idx} className="text-sm hover:bg-gray-50 transition-colors">
-                            {newReport.columns.map(col => (
-                              <td key={col.id} className="px-4 py-2">
-                                <input
-                                  type="text"
-                                  className={`w-full border border-transparent hover:border-blue-200 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 rounded-xl px-3 py-2 transition-all ${
-                                    col.type === 'number' ? 'text-right font-mono font-bold text-blue-900' : 'text-gray-700'
-                                  } ${col.formula ? 'bg-gray-100 cursor-not-allowed opacity-80' : 'bg-white/50'}`}
-                                  value={item[col.id] ?? (col.type === 'number' ? 0 : '')}
-                                  readOnly={!!col.formula}
-                                  placeholder={col.formula ? `[Calculé]` : ''}
-                                  onChange={(e) => {
-                                    const updatedItems = [...newReport.items];
-                                    const rawVal = e.target.value;
-                                    updatedItems[idx] = { 
-                                      ...updatedItems[idx], 
-                                      [col.id]: rawVal
-                                    };
-                                    setNewReport({ ...newReport, items: updatedItems });
-                                  }}
-                                  onBlur={(e) => {
-                                    if (col.type === 'number' && !col.formula) {
-                                      const rawVal = e.target.value;
-                                      let finalVal: any = rawVal;
-                                      
-                                      // If it contains math operators, evaluate it
-                                      if (rawVal && (rawVal.includes('+') || rawVal.includes('-') || rawVal.includes('*') || rawVal.includes('/'))) {
-                                        finalVal = evaluateFormula(rawVal, {});
-                                      } else {
-                                        finalVal = rawVal === '' ? '' : parseFloat(rawVal) || 0;
-                                      }
-                                      
-                                      const updatedItems = [...newReport.items];
-                                      updatedItems[idx] = { ...updatedItems[idx], [col.id]: finalVal };
-                                      setNewReport(updateReportTotals({ ...newReport, items: updatedItems }));
-                                    } else {
-                                      setNewReport(updateReportTotals(newReport));
+                          <tr key={idx} className={`hover:bg-gray-50 transition-colors ${
+                            newReport.tableFontSize === 'small' ? 'text-xs' : 
+                            newReport.tableFontSize === 'large' ? 'text-base' : 'text-sm'
+                          }`}>
+                            {newReport.columns.map((col, colIdx) => {
+                              // Check if this cell is covered by a span from another cell
+                              // 1. Check RowSpan from above
+                              for (let prevRowIdx = 0; prevRowIdx < idx; prevRowIdx++) {
+                                const prevItem = newReport.items[prevRowIdx];
+                                const span = prevItem[`_span_${col.id}`];
+                                if (span && span.rowSpan > 1 && idx < prevRowIdx + span.rowSpan) {
+                                  return null; // Don't render this cell
+                                }
+                              }
+                              
+                              // 2. Check ColSpan from the left in the same row
+                              for (let prevColIdx = 0; prevColIdx < colIdx; prevColIdx++) {
+                                const prevCol = newReport.columns[prevColIdx];
+                                const span = item[`_span_${prevCol.id}`];
+                                if (span && span.colSpan > 1 && colIdx < prevColIdx + span.colSpan) {
+                                  return null; // Don't render this cell
+                                }
+                              }
+
+                              const currentSpan = item[`_span_${col.id}`] || { rowSpan: 1, colSpan: 1 };
+
+                              return (
+                                <td 
+                                  key={col.id} 
+                                  className={`px-4 py-2 relative group/cell transition-all cursor-pointer ${
+                                    isMergeMode ? 'hover:bg-indigo-50 ring-1 ring-transparent hover:ring-indigo-300' : ''
+                                  } ${isCellSelected(idx, colIdx) ? 'bg-indigo-100 ring-2 ring-indigo-500 z-10' : ''}`}
+                                  rowSpan={currentSpan.rowSpan}
+                                  colSpan={currentSpan.colSpan}
+                                  onClick={() => handleCellClickForMerge(idx, colIdx)}
+                                  onMouseEnter={() => {
+                                    if (isMergeMode && mergeStart) {
+                                      setMergeEnd({ row: idx, colIdx });
                                     }
                                   }}
-                                />
-                              </td>
-                            ))}
-                            <td className="px-4 py-2 text-right">
+                                >
+                                  <div className="relative">
+                                    <input
+                                      type="text"
+                                      className={`w-full border border-transparent hover:border-blue-200 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 rounded-xl px-3 py-2 transition-all ${
+                                        isMergeMode ? 'pointer-events-none' : ''
+                                      } ${
+                                        col.type === 'number' && !newReport.centerText ? 'text-right' : 
+                                        newReport.centerText ? 'text-center' : 'text-left'
+                                      } ${col.type === 'number' ? 'font-mono font-bold text-blue-900' : 'text-gray-700'} ${
+                                        col.formula ? 'bg-gray-100 cursor-not-allowed opacity-80' : 'bg-white/50'
+                                      } ${
+                                        newReport.tableFontSize === 'small' ? 'text-xs px-2 py-1' : 
+                                        newReport.tableFontSize === 'large' ? 'text-base py-3' : 'text-sm'
+                                      }`}
+                                      value={item[col.id] ?? (col.type === 'number' ? 0 : '')}
+                                      readOnly={!!col.formula || isMergeMode}
+                                      placeholder={col.formula ? `[Calculé]` : ''}
+                                      onChange={(e) => {
+                                        const updatedItems = [...newReport.items];
+                                        const rawVal = e.target.value;
+                                        updatedItems[idx] = { 
+                                          ...updatedItems[idx], 
+                                          [col.id]: rawVal
+                                        };
+                                        setNewReport(prev => ({ ...prev, items: updatedItems }));
+                                      }}
+                                      onBlur={(e) => {
+                                        if (col.type === 'number' && !col.formula) {
+                                          const rawVal = e.target.value;
+                                          let finalVal: any = rawVal;
+                                          
+                                          // If it contains math operators, evaluate it
+                                          if (rawVal && (rawVal.includes('+') || rawVal.includes('-') || rawVal.includes('*') || rawVal.includes('/'))) {
+                                            finalVal = evaluateFormula(rawVal, {});
+                                          } else {
+                                            finalVal = rawVal === '' ? '' : parseFloat(rawVal) || 0;
+                                          }
+                                          
+                                          setNewReport(prev => {
+                                            const updatedItems = [...prev.items];
+                                            updatedItems[idx] = { ...updatedItems[idx], [col.id]: finalVal };
+                                            return updateReportTotals({ ...prev, items: updatedItems });
+                                          });
+                                        } else {
+                                          setNewReport(prev => updateReportTotals(prev));
+                                        }
+                                      }}
+                                    />
+                                    
+                                    {/* Quick Unmerge (Shown on cell group hover only if merged) */}
+                                    {(currentSpan.rowSpan > 1 || currentSpan.colSpan > 1) && !isMergeMode && (
+                                      <div className="absolute -top-4 -right-4 hidden group-hover/cell:flex items-center gap-1 bg-white shadow-lg border border-red-100 rounded-full p-1 z-20">
+                                        <button
+                                          type="button"
+                                          title="Annuler les fusions"
+                                          onClick={() => handleSetSpan(idx, col.id, 1, 1)}
+                                          className="p-1 hover:bg-red-50 text-red-600 rounded-full transition-colors"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                            <td className="px-4 py-2 text-right sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.1)] z-10">
                               <div className="flex justify-end gap-1">
                                 <button 
                                   type="button"
@@ -866,7 +1064,7 @@ const AdminMonthlyReports: React.FC = () => {
                                 <button 
                                   type="button"
                                   onClick={() => handleRemoveItem(idx)} 
-                                  className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-all"
+                                  className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-all shadow-sm bg-red-50/50"
                                   title="Supprimer cette ligne"
                                 >
                                   <Trash2 size={16} />
@@ -886,6 +1084,24 @@ const AdminMonthlyReports: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap gap-4 mb-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMergeMode(!isMergeMode);
+                    setMergeStart(null);
+                    setMergeEnd(null);
+                  }}
+                  className={`h-[60px] px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-md group ${
+                    isMergeMode 
+                      ? 'bg-indigo-600 text-white animate-pulse' 
+                      : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                  }`}
+                >
+                  <Settings className={`${isMergeMode ? 'animate-spin' : ''}`} size={20} />
+                  {isMergeMode ? (mergeStart ? 'Cliquez sur la cellule de fin' : 'Selectionnez la 1ère cellule') : 'Mode Fusion (Word-style)'}
+                  {isMergeMode && <X size={16} onClick={(e) => { e.stopPropagation(); setIsMergeMode(false); }} className="ml-2 hover:scale-125" />}
+                </button>
+
                 <label className="flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-2 rounded-xl hover:bg-gray-100 transition-all">
                   <input
                     type="checkbox"
@@ -979,6 +1195,27 @@ const AdminMonthlyReports: React.FC = () => {
                   />
                   <span className="text-sm font-medium text-slate-700 font-bold">Masquer Pied de page</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-cyan-50 px-4 py-2 rounded-xl hover:bg-cyan-100 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={newReport.centerText}
+                    onChange={(e) => setNewReport(prev => ({ ...prev, centerText: e.target.checked }))}
+                    className="w-5 h-5 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                  />
+                  <span className="text-sm font-medium text-cyan-700 font-bold">Centrer le texte du tableau</span>
+                </label>
+                <div className="flex items-center gap-2 bg-purple-50 px-4 py-2 rounded-xl">
+                  <span className="text-sm font-medium text-purple-700 font-bold">Taille texte :</span>
+                  <select
+                    className="bg-white border-none rounded-lg text-sm px-2 py-1 focus:ring-2 focus:ring-purple-500 outline-none"
+                    value={newReport.tableFontSize}
+                    onChange={(e) => setNewReport({ ...newReport, tableFontSize: e.target.value as any })}
+                  >
+                    <option value="small">Petit</option>
+                    <option value="medium">Moyen</option>
+                    <option value="large">Grand</option>
+                  </select>
+                </div>
                 <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-xl">
                   <span className="text-sm font-medium text-gray-700">Devise :</span>
                   <input
@@ -1272,6 +1509,28 @@ const AdminMonthlyReports: React.FC = () => {
                     editingId ? 'Mettre à jour' : 'Enregistrer le Bilan'
                   )}
                 </button>
+                
+                {editingId && (
+                  <button 
+                    type="button"
+                    onClick={async () => {
+                      if (window.confirm("Voulez-vous vraiment supprimer ce bilan définitivement ? Cette action est irréversible.")) {
+                        try {
+                          await handleDeleteReport(editingId);
+                          setIsAdding(false);
+                          setEditingId(null);
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }
+                    }}
+                    className="bg-red-100 text-red-700 px-8 py-4 rounded-2xl font-bold hover:bg-red-200 transition-all flex items-center gap-2"
+                  >
+                    <Trash2 size={20} />
+                    Supprimer le Bilan
+                  </button>
+                )}
+
                 <button type="button" onClick={() => {
                   if (window.confirm('Voulez-vous vraiment annuler ? Toutes les données non enregistrées seront perdues.')) {
                     setIsAdding(false);
@@ -1304,6 +1563,8 @@ const AdminMonthlyReports: React.FC = () => {
                       hideSignatures: false,
                       hideArrete: false,
                       hideFooter: false,
+                      centerText: false,
+                      tableFontSize: 'medium',
                       managerTitle: 'La Gérante',
                       bailleurLabel: 'Le BAILLEUR'
                     });

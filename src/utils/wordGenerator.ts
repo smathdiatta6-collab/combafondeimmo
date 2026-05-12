@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun, Table, TableCell, TableRow, WidthType, AlignmentType, VerticalAlign, HeadingLevel } from 'docx';
+import { Document, Packer, Paragraph, TextRun, Table, TableCell, TableRow, WidthType, AlignmentType, VerticalAlign, HeadingLevel, ShadingType } from 'docx';
 import { saveAs } from 'file-saver';
 
 export const generateMonthlyReportWord = async (report: any) => {
@@ -47,14 +47,28 @@ export const generateMonthlyReportWord = async (report: any) => {
           new Paragraph({
             children: [
               new TextRun({
-                text: `Chez : ${report.chez || '...'}`,
+                text: "Chez : ",
                 bold: true,
                 size: 24,
               }),
               new TextRun({
-                text: `\t\t\t\t\tMois : ${report.mois || '...'}`,
+                text: report.chez || '...',
                 bold: true,
                 size: 24,
+                font: "Times New Roman",
+                color: "000000",
+              }),
+              new TextRun({
+                text: "\t\t\t\t\tMois : ",
+                bold: true,
+                size: 24,
+              }),
+              new TextRun({
+                text: report.mois || '...',
+                bold: true,
+                size: 24,
+                font: "Times New Roman",
+                color: "000000",
               }),
             ],
           }),
@@ -66,6 +80,8 @@ export const generateMonthlyReportWord = async (report: any) => {
                 text: report.title || 'BILAN MENSUEL',
                 bold: true,
                 size: 32,
+                font: report.title ? "Times New Roman" : undefined,
+                color: report.title ? "000000" : undefined,
                 underline: {},
               }),
             ],
@@ -80,29 +96,81 @@ export const generateMonthlyReportWord = async (report: any) => {
             rows: [
               // Header Row
               new TableRow({
-                children: (report.columns || []).map((col: any) => 
-                  new TableCell({
+                children: (report.columns || []).map((col: any) => {
+                  const fontSize = 
+                    report.tableFontSize === 'small' ? 16 : 
+                    report.tableFontSize === 'large' ? 24 : 20;
+
+                  return new TableCell({
                     children: [new Paragraph({ 
-                      children: [new TextRun({ text: col.label, bold: true })], 
-                      alignment: AlignmentType.CENTER 
+                      children: [new TextRun({ 
+                        text: col.label, 
+                        bold: true, 
+                        size: fontSize,
+                        color: "FFFFFF"
+                      })], 
+                      alignment: report.centerText ? AlignmentType.CENTER : AlignmentType.CENTER 
                     })],
                     verticalAlign: VerticalAlign.CENTER,
-                  })
-                ),
+                    shading: {
+                      fill: "1E3A8A", // Blue 900
+                      type: ShadingType.CLEAR,
+                      color: "auto",
+                    },
+                  });
+                }),
               }),
               // Data Rows
-              ...(report.items || []).map((item: any) => 
-                new TableRow({
-                  children: (report.columns || []).map((col: any) => 
-                    new TableCell({
-                      children: [new Paragraph({ 
-                        text: String(item[col.id] || ''), 
-                        alignment: col.type === 'number' ? AlignmentType.CENTER : AlignmentType.LEFT 
-                      })],
-                    })
-                  ),
-                })
-              ),
+              ...(() => {
+                const columns = report.columns || [];
+                const items = report.items || [];
+                const covered = items.map(() => columns.map(() => false));
+                const dataRows: TableRow[] = [];
+
+                items.forEach((item: any, rowIdx: number) => {
+                  const cells: TableCell[] = [];
+                  columns.forEach((col: any, colIdx: number) => {
+                    if (covered[rowIdx][colIdx]) return;
+
+                    const span = item[`_span_${col.id}`] || { rowSpan: 1, colSpan: 1 };
+                    
+                    // Mark covered cells
+                    for (let r = 0; r < span.rowSpan; r++) {
+                      for (let c = 0; c < span.colSpan; c++) {
+                        if (rowIdx + r < covered.length && colIdx + c < covered[0].length) {
+                          covered[rowIdx + r][colIdx + c] = true;
+                        }
+                      }
+                    }
+
+                    const fontSize = 
+                      report.tableFontSize === 'small' ? 16 : 
+                      report.tableFontSize === 'large' ? 24 : 20;
+
+                    cells.push(
+                      new TableCell({
+                        rowSpan: span.rowSpan,
+                        columnSpan: span.colSpan,
+                        children: [new Paragraph({ 
+                          children: [new TextRun({ 
+                            text: String(item[col.id] || ''), 
+                            size: fontSize,
+                            bold: col.type === 'number',
+                            font: "Times New Roman",
+                            color: "000000"
+                          })], 
+                          alignment: report.centerText ? AlignmentType.CENTER : (col.type === 'number' ? AlignmentType.RIGHT : AlignmentType.LEFT)
+                        })],
+                        verticalAlign: VerticalAlign.CENTER,
+                      })
+                    );
+                  });
+                  if (cells.length > 0) {
+                    dataRows.push(new TableRow({ children: cells }));
+                  }
+                });
+                return dataRows;
+              })(),
               // Totals
               ...(report.hideTotalPaye ? [] : [
                 new TableRow({
@@ -110,13 +178,20 @@ export const generateMonthlyReportWord = async (report: any) => {
                     new TableCell({
                       columnSpan: Math.max(1, (report.columns || []).length - 1),
                       children: [new Paragraph({ 
-                        children: [new TextRun({ text: "TOTAL PAYE", bold: true })], 
+                        children: [new TextRun({ 
+                          text: "TOTAL PAYE", 
+                          bold: true,
+                          size: report.tableFontSize === 'small' ? 16 : (report.tableFontSize === 'large' ? 24 : 20)
+                        })], 
                         alignment: AlignmentType.RIGHT 
                       })],
                     }),
                     new TableCell({
                       children: [new Paragraph({ 
-                        children: [new TextRun({ text: `${report.totalPaye}${reportCurrency}`, bold: true })], 
+                        children: [new TextRun({ 
+                          text: `${report.totalPaye}${reportCurrency}`, 
+                          bold: true
+                        })], 
                         alignment: AlignmentType.CENTER 
                       })],
                     }),
@@ -135,7 +210,10 @@ export const generateMonthlyReportWord = async (report: any) => {
                     }),
                     new TableCell({
                       children: [new Paragraph({ 
-                        children: [new TextRun({ text: `${row.value}${row.suffix || reportCurrency}`, bold: true })], 
+                        children: [new TextRun({ 
+                          text: `${row.value}${row.suffix || reportCurrency}`, 
+                          bold: true
+                        })], 
                         alignment: AlignmentType.CENTER 
                       })],
                     }),
@@ -156,7 +234,7 @@ export const generateMonthlyReportWord = async (report: any) => {
                       children: [new Paragraph({ 
                         children: [new TextRun({ 
                           text: report.commissionInWords ? (report.commissionWords || '') : `${report.totalCommission}${reportCurrency}`, 
-                          bold: true 
+                          bold: true
                         })], 
                         alignment: AlignmentType.CENTER 
                       })],
@@ -176,7 +254,10 @@ export const generateMonthlyReportWord = async (report: any) => {
                     }),
                     new TableCell({
                       children: [new Paragraph({ 
-                        children: [new TextRun({ text: `${report.totalRemettre}${reportCurrency}`, bold: true })], 
+                        children: [new TextRun({ 
+                          text: `${report.totalRemettre}${reportCurrency}`, 
+                          bold: true
+                        })], 
                         alignment: AlignmentType.CENTER 
                       })],
                     }),
@@ -193,9 +274,16 @@ export const generateMonthlyReportWord = async (report: any) => {
               alignment: AlignmentType.CENTER,
               children: [
                 new TextRun({
-                  text: `ARRETE A LA SOMME DE : ${report.arreteSomme || '...'}`,
+                  text: "ARRETE A LA SOMME DE : ",
                   bold: true,
                   size: 22,
+                }),
+                new TextRun({
+                  text: report.arreteSomme || '...',
+                  bold: true,
+                  size: 22,
+                  font: "Times New Roman",
+                  color: "000000",
                 }),
               ],
             }),
@@ -206,8 +294,14 @@ export const generateMonthlyReportWord = async (report: any) => {
             alignment: AlignmentType.RIGHT,
             children: [
               new TextRun({
-                text: `Fait à Rufisque, le ${report.date ? new Date(report.date).toLocaleDateString('fr-FR') : '...'}`,
+                text: "Fait à Rufisque, le ",
                 size: 20,
+              }),
+              new TextRun({
+                text: report.date ? new Date(report.date).toLocaleDateString('fr-FR') : '...',
+                size: 20,
+                font: "Times New Roman",
+                color: "000000",
               }),
             ],
           }),
