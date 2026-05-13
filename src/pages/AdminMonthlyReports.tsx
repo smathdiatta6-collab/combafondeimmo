@@ -1041,7 +1041,42 @@ const AdminMonthlyReports: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 ml-1">Chez (Bailleur)</label>
+                  <div className="flex justify-between items-center ml-1">
+                    <label className="text-sm font-bold text-gray-700">Chez (Bailleur)</label>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const search = prompt("Entrez le nom du bailleur (ex: Sy) :");
+                        if (search) {
+                          const previous = reports.filter(r => 
+                            r.chez?.toLowerCase().includes(search.toLowerCase())
+                          ).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                          
+                          if (previous.length > 0) {
+                            const latest = previous[0];
+                            if (window.confirm(`Importer les locataires de ${latest.chez} (${latest.mois}) ?`)) {
+                              const importedItems = latest.items.map((item: any) => ({
+                                ...item,
+                                paye: 0,
+                                nonPaye: Number(item.loyer) || 0
+                              }));
+                              setNewReport(prev => updateReportTotals({
+                                ...prev,
+                                items: importedItems,
+                                chez: latest.chez,
+                                columns: latest.columns || prev.columns
+                              }));
+                            }
+                          } else {
+                            alert("Aucun bilan trouvé pour ce nom.");
+                          }
+                        }
+                      }}
+                      className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1"
+                    >
+                      <Plus size={12} /> Importer une liste existante
+                    </button>
+                  </div>
                   <div className="relative">
                     <input
                       type="text"
@@ -1053,9 +1088,9 @@ const AdminMonthlyReports: React.FC = () => {
                         setNewReport({ ...newReport, chez: val });
                         
                         // Check if we have a previous report for this bailleur to offer import
-                        if (val.length > 2) {
+                        if (val.length >= 2) {
                           const lastOne = reports.find(r => 
-                            r.chez?.toLowerCase().trim() === val.toLowerCase().trim()
+                            r.chez?.toLowerCase().includes(val.toLowerCase().trim())
                           );
                           setLastReportForBailleur(lastOne || null);
                         } else {
