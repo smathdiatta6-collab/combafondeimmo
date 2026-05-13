@@ -31,6 +31,7 @@ const AdminReceipts: React.FC = () => {
 
   const [newReceipt, setNewReceipt] = useState({ 
     clientName: '', 
+    bailleurName: '',
     amount: 0, 
     amountInWords: '',
     date: new Date().toISOString().split('T')[0], 
@@ -48,6 +49,8 @@ const AdminReceipts: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterYear, setFilterYear] = useState('');
 
   const [contractsLoaded, setContractsLoaded] = useState(false);
   const [reportToProcess, setReportToProcess] = useState<any>(null);
@@ -121,6 +124,7 @@ const AdminReceipts: React.FC = () => {
 
         return addDoc(collection(db, 'receipts'), {
           clientName: clientName,
+          bailleurName: reportToProcess.chez || '',
           amount: amount,
           amountInWords: numberToWordsFrench(amount),
           date: reportToProcess.date || new Date().toISOString().split('T')[0],
@@ -169,8 +173,17 @@ const AdminReceipts: React.FC = () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'receipts'));
       const fetchedReceipts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      // Sort alphabetically by client name
-      fetchedReceipts.sort((a, b) => (a.clientName || '').localeCompare(b.clientName || ''));
+      // Sort alphabetically by bailleur name then client name
+      fetchedReceipts.sort((a, b) => {
+        const bA = (a.bailleurName || '').toLowerCase();
+        const bB = (b.bailleurName || '').toLowerCase();
+        if (bA < bB) return -1;
+        if (bA > bB) return 1;
+        
+        const cA = (a.clientName || '').toLowerCase();
+        const cB = (b.clientName || '').toLowerCase();
+        return cA.localeCompare(cB);
+      });
       setReceipts(fetchedReceipts);
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'receipts');
@@ -219,6 +232,7 @@ const AdminReceipts: React.FC = () => {
       }
       setNewReceipt({ 
         clientName: '', 
+        bailleurName: '',
         amount: 0, 
         amountInWords: '',
         date: new Date().toISOString().split('T')[0], 
@@ -244,6 +258,7 @@ const AdminReceipts: React.FC = () => {
   const handleEditClick = (receipt: any) => {
     setNewReceipt({
       clientName: receipt.clientName || '',
+      bailleurName: receipt.bailleurName || '',
       amount: receipt.amount || 0,
       amountInWords: receipt.amountInWords || '',
       date: receipt.date || '',
@@ -266,6 +281,7 @@ const AdminReceipts: React.FC = () => {
   const handleDuplicate = (receipt: any) => {
     setNewReceipt({
       clientName: `${receipt.clientName} (Copie)`,
+      bailleurName: receipt.bailleurName || '',
       amount: receipt.amount || 0,
       amountInWords: receipt.amountInWords || '',
       date: new Date().toISOString().split('T')[0],
@@ -302,11 +318,31 @@ const AdminReceipts: React.FC = () => {
     generateReceiptPDF(receipt, contract, paymentMethod);
   };
 
-  const filteredReceipts = receipts.filter(receipt => 
-    (receipt.clientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (receipt.propertyAddress || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (receipt.date || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const months = [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+  ];
+
+  const yearsArray = Array.from({ length: 11 }, (_, i) => (new Date().getFullYear() - 5 + i).toString());
+
+  const filteredReceipts = receipts.filter(receipt => {
+    const searchLower = searchTerm.toLowerCase();
+    const periodLabel = (receipt.periodLabel || '').toLowerCase();
+    const date = receipt.date || '';
+    
+    // Monthly Filtering
+    const monthMatch = !filterMonth || periodLabel.includes(filterMonth.toLowerCase());
+    const yearMatch = !filterYear || date.includes(filterYear) || periodLabel.includes(filterYear);
+
+    if (!monthMatch || !yearMatch) return false;
+
+    return (
+      (receipt.clientName || '').toLowerCase().includes(searchLower) ||
+      (receipt.bailleurName || '').toLowerCase().includes(searchLower) ||
+      (receipt.propertyAddress || '').toLowerCase().includes(searchLower) ||
+      date.toLowerCase().includes(searchLower)
+    );
+  });
 
   const handleRemoveDuplicates = async () => {
     if (!window.confirm('Voulez-vous vraiment supprimer les quittances en double (même client, même montant, même période) ?')) return;
@@ -581,16 +617,54 @@ const AdminReceipts: React.FC = () => {
           </div>
         )}
 
-        {/* Search Bar */}
-        <div className="mb-8 relative">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={24} />
-          <input
-            type="text"
-            placeholder="Rechercher un locataire, une adresse ou une date..."
-            className="w-full pl-16 pr-8 py-5 bg-white border-none rounded-[2rem] shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-lg"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        {/* Search & Filter Bar */}
+        <div className="mb-8 space-y-4">
+          <div className="relative max-w-5xl mx-auto flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={24} />
+              <input
+                type="text"
+                placeholder="Rechercher un locataire, une adresse ou une date..."
+                className="w-full pl-16 pr-8 py-5 bg-white border-none rounded-[2rem] shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-lg"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex gap-4 w-full md:w-auto">
+              <select
+                className="flex-1 md:w-48 px-4 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-700 h-[60px] md:h-auto"
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+              >
+                <option value="">Tous les mois</option>
+                {months.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              
+              <select
+                className="flex-1 md:w-40 px-4 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-700 h-[60px] md:h-auto"
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+              >
+                <option value="">Années</option>
+                {yearsArray.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              
+              {(filterMonth || filterYear || searchTerm) && (
+                <button
+                  onClick={() => {
+                    setFilterMonth('');
+                    setFilterYear('');
+                    setSearchTerm('');
+                  }}
+                  className="px-6 py-4 bg-gray-200 text-gray-600 rounded-2xl hover:bg-gray-300 transition-all font-bold flex items-center justify-center h-[60px] md:h-auto"
+                  title="Réinitialiser les filtres"
+                >
+                  <X size={24} />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <Modal
@@ -600,6 +674,7 @@ const AdminReceipts: React.FC = () => {
             setEditingId(null);
             setNewReceipt({ 
               clientName: '', 
+              bailleurName: '',
               amount: 0, 
               amountInWords: '',
               date: new Date().toISOString().split('T')[0], 
@@ -627,6 +702,15 @@ const AdminReceipts: React.FC = () => {
                 className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 value={newReceipt.clientName}
                 onChange={(e) => setNewReceipt({ ...newReceipt, clientName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Bailleur (Propriétaire)</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newReceipt.bailleurName}
+                onChange={(e) => setNewReceipt({ ...newReceipt, bailleurName: e.target.value })}
               />
             </div>
             <div className="space-y-2">
@@ -830,7 +914,12 @@ const AdminReceipts: React.FC = () => {
                     </button>
                   </div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">{receipt.clientName}</h3>
+                <h3 className="text-2xl font-bold text-gray-900 mb-1">{receipt.clientName}</h3>
+                {receipt.bailleurName && (
+                  <p className="text-blue-600 font-bold text-xs mb-3 flex items-center gap-1 uppercase">
+                    <Logo className="h-3 w-auto opacity-70" /> {receipt.bailleurName}
+                  </p>
+                )}
                 <div className="flex justify-between items-center mb-4">
                   <p className="text-green-600 font-bold text-lg">{formatAmount(receipt.amount)} FCFA</p>
                   <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${

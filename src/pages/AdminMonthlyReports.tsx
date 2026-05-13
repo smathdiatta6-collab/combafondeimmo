@@ -25,12 +25,17 @@ const AdminMonthlyReports: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterYear, setFilterYear] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [hasRestored, setHasRestored] = useState(false);
   const [showColumnManager, setShowColumnManager] = useState(false);
   const [showCustomRowForm, setShowCustomRowForm] = useState(false);
   const [customRowData, setCustomRowData] = useState({ label: '', value: 0, suffix: ' FCFA' });
   const [editingCustomRowIndex, setEditingCustomRowIndex] = useState<number | null>(null);
+  const [showUnpaidDetails, setShowUnpaidDetails] = useState<{ isOpen: boolean, report: any }>({ isOpen: false, report: null });
+  const [receipts, setReceipts] = useState<any[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Selection-based Merge System
   const [isMergeMode, setIsMergeMode] = useState(false);
@@ -42,7 +47,7 @@ const AdminMonthlyReports: React.FC = () => {
     { id: 'nom', label: 'Nom', type: 'text' },
     { id: 'loyer', label: 'Loyer', type: 'number' },
     { id: 'paye', label: 'Payé', type: 'number' },
-    { id: 'nonPaye', label: 'Non Payé', type: 'number' },
+    { id: 'nonPaye', label: 'Non Payé', type: 'number', formula: 'loyer - paye' },
   ];
 
   const [newReport, setNewReport] = useState({
@@ -80,6 +85,7 @@ const AdminMonthlyReports: React.FC = () => {
   useEffect(() => {
     if (user && isAdmin) {
       fetchReports();
+      fetchReceipts();
       
       // Load auto-saved data
       const savedReport = localStorage.getItem('draft_monthly_report');
@@ -202,12 +208,132 @@ const AdminMonthlyReports: React.FC = () => {
     return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   };
 
+  const getUnpaidTenants = (report: any) => {
+    const unpaid = (report.items || []).filter((item: any) => {
+      const nonPaye = Number(item.nonPaye) || 0;
+      const paye = Number(item.paye) || 0;
+      const loyer = Number(item.loyer) || 0;
+      // Consider unpaid if there's a nonPaye amount OR if Loyers > Paye (in case loyer column exists)
+      return nonPaye > 0 || (loyer > 0 && paye < loyer);
+    });
+    
+    const totalDebt = unpaid.reduce((sum: number, item: any) => {
+      const loyer = Number(item.loyer) || 0;
+      const paye = Number(item.paye) || 0;
+      const nonPaye = Number(item.nonPaye) || 0;
+      
+      // If nonPaye is explicitly set, use it. Otherwise calculate LOYER - PAYE if available.
+      if (nonPaye > 0) return sum + nonPaye;
+      if (loyer > 0) return sum + Math.max(0, loyer - paye);
+      return sum;
+    }, 0);
+
+    return { unpaid, totalDebt };
+  };
+
   const fetchReports = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'monthlyReports'));
       setReports(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'monthlyReports');
+    }
+  };
+
+  const fetchReceipts = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'receipts'));
+      setReceipts(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error("Error fetching receipts:", error);
+    }
+  };
+
+  const handleSyncReceipts = async () => {
+    if (newReport.items.length === 0) {
+      alert("Ajoutez d'abord des locataires au tableau.");
+      return;
+    }
+
+    if (!window.confirm("Voulez-vous synchroniser les paiements avec les quittances existantes ? Cela mettra à jour la colonne 'Payé' pour les locataires ayant une quittance ce mois-ci.")) {
+      return;
+    }
+
+    setIsSyncing(true);
+    
+    try {
+      // 1. Fetch latest receipts before syncing
+      const querySnapshot = await getDocs(collection(db, 'receipts'));
+      const latestReceipts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      setReceipts(latestReceipts);
+
+      if (latestReceipts.length === 0) {
+        alert("Aucune quittance trouvée dans la base de données.");
+        setIsSyncing(false);
+        return;
+      }
+
+      // Extract month from "Mois Année" (e.g., "Janvier 2026" -> "Janvier")
+      const reportMonthMatch = newReport.mois.split(' ')[0];
+      let matchCount = 0;
+      
+      const updatedItems = newReport.items.map(item => {
+        const tenantPrenom = (item.prenoms || '').trim().toLowerCase();
+        const tenantNom = (item.nom || '').trim().toLowerCase();
+        const tenantFullName = `${tenantPrenom} ${tenantNom}`.trim();
+        
+        // Default to current paye value (don't zero it out if not found, to be safe)
+        // Actually, user said "only those with receipts paid", so let's keep it as is but maybe alert.
+        let payeAmount = Number(item.paye) || 0;
+
+        if (tenantFullName || tenantNom) {
+          // Find a matching receipt
+          const matchingReceipt = latestReceipts.find(r => {
+            const receiptClient = (r.clientName || '').trim().toLowerCase();
+            
+            // Name matching strategies:
+            const exactMatch = receiptClient === tenantFullName;
+            const containsMatch = receiptClient.includes(tenantFullName) || tenantFullName.includes(receiptClient);
+            const lastNameMatch = tenantNom && tenantNom.length > 2 && receiptClient.includes(tenantNom);
+
+            const nameMatch = exactMatch || containsMatch || lastNameMatch;
+            
+            if (!nameMatch) return false;
+
+            // Period matching: check if receipt label or period dates overlap with report month
+            const rPeriod = (r.periodLabel || '').toLowerCase();
+            const periodMatch = rPeriod.includes(reportMonthMatch.toLowerCase());
+            
+            return nameMatch && periodMatch;
+          });
+
+          if (matchingReceipt) {
+            payeAmount = Number(matchingReceipt.amount) || 0;
+            matchCount++;
+          } else {
+            // Option to zero out or keep? User said "only those with receipts paid".
+            // Let's set to 0 if no receipt found for this month, as per user's specific request logic.
+            payeAmount = 0;
+          }
+        }
+
+        return {
+          ...item,
+          paye: payeAmount
+        };
+      });
+
+      setNewReport(prev => updateReportTotals({
+        ...prev,
+        items: updatedItems
+      }));
+      
+      alert(`Synchronisation terminée ! ${matchCount} locataires mis à jour d'après les quittances de ${reportMonthMatch}.`);
+    } catch (error) {
+      console.error("Error during sync:", error);
+      alert("Une erreur est survenue lors de la synchronisation.");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -545,12 +671,20 @@ const AdminMonthlyReports: React.FC = () => {
 
   const filteredReports = reports.filter(report => {
     const searchLower = searchTerm.toLowerCase();
+    const reportMonth = report.mois || '';
     
     // Search in basic report fields (Owner or Month)
     const basicMatch = 
       report.chez?.toLowerCase().includes(searchLower) ||
-      report.mois?.toLowerCase().includes(searchLower);
+      reportMonth.toLowerCase().includes(searchLower);
       
+    // Month/Year Filtres
+    const monthMatch = !filterMonth || reportMonth.toLowerCase().includes(filterMonth.toLowerCase());
+    const yearMatch = !filterYear || reportMonth.includes(filterYear);
+
+    if (!monthMatch || !yearMatch) return false;
+    if (searchTerm === '') return true;
+
     if (basicMatch) return true;
     
     // Search in all items (Tenants) within the report
@@ -632,16 +766,52 @@ const AdminMonthlyReports: React.FC = () => {
           </button>
         </div>
 
-        <div className="mb-12">
-          <div className="relative max-w-2xl mx-auto">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Rechercher par bailleur, locataire ou mois..."
-              className="w-full pl-14 pr-6 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        <div className="mb-12 space-y-4">
+          <div className="relative max-w-4xl mx-auto flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Rechercher par bailleur, locataire..."
+                className="w-full pl-14 pr-6 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex gap-4 w-full md:w-auto">
+              <select
+                className="flex-1 md:w-40 px-4 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-700"
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+              >
+                <option value="">Tous les mois</option>
+                {months.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              
+              <select
+                className="flex-1 md:w-32 px-4 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-700"
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+              >
+                <option value="">Toutes les années</option>
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              
+              {(filterMonth || filterYear || searchTerm) && (
+                <button
+                  onClick={() => {
+                    setFilterMonth('');
+                    setFilterYear('');
+                    setSearchTerm('');
+                  }}
+                  className="px-6 py-4 bg-gray-200 text-gray-600 rounded-2xl hover:bg-gray-300 transition-all font-bold"
+                  title="Réinitialiser les filtres"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -943,11 +1113,17 @@ const AdminMonthlyReports: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {newReport.items.map((item, idx) => (
-                          <tr key={idx} className={`hover:bg-gray-50 transition-colors ${
-                            newReport.tableFontSize === 'small' ? 'text-xs' : 
-                            newReport.tableFontSize === 'large' ? 'text-base' : 'text-sm'
-                          }`}>
+                        {newReport.items.map((item, idx) => {
+                          const { unpaid } = getUnpaidTenants({ items: [item], columns: newReport.columns });
+                          const isUnpaid = unpaid.length > 0;
+                          
+                          return (
+                            <tr key={idx} className={`hover:bg-gray-50 transition-colors ${
+                              isUnpaid ? 'bg-red-50/30' : ''
+                            } ${
+                              newReport.tableFontSize === 'small' ? 'text-xs' : 
+                              newReport.tableFontSize === 'large' ? 'text-base' : 'text-sm'
+                            }`}>
                             {newReport.columns.map((col, colIdx) => {
                               // Check if this cell is covered by a span from another cell
                               // 1. Check RowSpan from above
@@ -1072,8 +1248,9 @@ const AdminMonthlyReports: React.FC = () => {
                               </div>
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
+                        );
+                      })}
+                    </tbody>
                     </table>
                   </div>
                 ) : (
@@ -1235,6 +1412,22 @@ const AdminMonthlyReports: React.FC = () => {
                     className="w-full h-[60px] bg-blue-100 text-blue-700 font-bold rounded-2xl hover:bg-blue-200 transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
                     <Plus size={20} /> Ajouter un locataire
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleSyncReceipts}
+                    disabled={isSyncing}
+                    className="w-full h-[60px] bg-green-100 text-green-700 font-bold rounded-2xl hover:bg-green-200 transition-all flex items-center justify-center gap-2 shadow-sm group"
+                    title="Remplit automatiquement la colonne 'Payé' d'après les quittances générées"
+                  >
+                    {isSyncing ? (
+                      <div className="w-5 h-5 border-2 border-green-700 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Receipt size={20} className="group-hover:rotate-12 transition-transform" />
+                    )}
+                    Sync Quittances
                   </button>
                 </div>
                 <div className="space-y-2">
@@ -1582,8 +1775,13 @@ const AdminMonthlyReports: React.FC = () => {
             <div key={report.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between group hover:shadow-xl transition-all">
               <div>
                 <div className="flex justify-between items-start mb-6">
-                  <div className="w-14 h-14 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center">
+                  <div className="w-14 h-14 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center relative">
                     <FileBarChart size={28} />
+                    {getUnpaidTenants(report).unpaid.length > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full border-2 border-white shadow-sm" title={`${getUnpaidTenants(report).unpaid.length} locataires n'ont pas encore payé`}>
+                        {getUnpaidTenants(report).unpaid.length}
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -1624,6 +1822,38 @@ const AdminMonthlyReports: React.FC = () => {
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">Chez {report.chez}</h3>
                 <p className="text-orange-600 font-bold text-sm mb-4">{report.mois}</p>
+                
+                {/* Payment Summary Badge */}
+                {(() => {
+                  const { unpaid, totalDebt } = getUnpaidTenants(report);
+                  if (unpaid.length === 0) {
+                    return (
+                      <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold mb-4">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        Tout payé
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-2 mb-4">
+                      <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                        {unpaid.length} Impayé{unpaid.length > 1 ? 's' : ''}
+                      </div>
+                      <p className="text-xs font-bold text-red-600">Total dû : {formatAmount(totalDebt)} FCFA</p>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowUnpaidDetails({ isOpen: true, report });
+                        }}
+                        className="text-[10px] font-bold text-red-700 underline hover:text-red-900 transition-colors"
+                      >
+                        Voir qui n'a pas payé ({unpaid.length})
+                      </button>
+                    </div>
+                  );
+                })()}
+
                 <div className="space-y-2 text-sm text-gray-500">
                   <p>Commission: {report.commissionInWords ? <span className="text-indigo-600 font-bold italic">"{report.commissionWords}"</span> : `${formatAmount(report.totalCommission)} FCFA`}</p>
                   <p>À remettre: {formatAmount(report.totalRemettre)} FCFA</p>
@@ -1653,6 +1883,86 @@ const AdminMonthlyReports: React.FC = () => {
             </div>
           ))}
         </div>
+
+        {/* Modal for Unpaid Details */}
+        <Modal
+          isOpen={showUnpaidDetails.isOpen}
+          onClose={() => setShowUnpaidDetails({ isOpen: false, report: null })}
+          title={`Détails des Impayés - ${showUnpaidDetails.report?.chez} (${showUnpaidDetails.report?.mois})`}
+        >
+          <div className="space-y-6">
+            <div className="bg-red-50 p-6 rounded-3xl border border-red-100 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-red-900 font-bold flex items-center gap-2">
+                  <X className="bg-red-500 text-white rounded-full p-1" size={24} />
+                  Locataires n'ayant pas payé
+                </h4>
+                <div className="text-right">
+                  <p className="text-xs text-red-600 uppercase font-bold tracking-wider">Total restant dû</p>
+                  <p className="text-2xl font-black text-red-700">
+                    {showUnpaidDetails.report ? formatAmount(getUnpaidTenants(showUnpaidDetails.report).totalDebt) : 0} FCFA
+                  </p>
+                </div>
+              </div>
+              
+              <div className="overflow-hidden rounded-2xl border border-red-200">
+                <table className="w-full text-left">
+                  <thead className="bg-red-100 text-red-800 text-xs uppercase font-bold">
+                    <tr>
+                      <th className="px-4 py-3">Locataire</th>
+                      <th className="px-4 py-3 text-right">Loyer Total</th>
+                      <th className="px-4 py-3 text-right">Montant Payé</th>
+                      <th className="px-4 py-3 text-right">Reste à Payer</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-red-100 bg-white">
+                    {showUnpaidDetails.report && getUnpaidTenants(showUnpaidDetails.report).unpaid.map((item: any, idx: number) => {
+                      const loyer = Number(item.loyer) || 0;
+                      const paye = Number(item.paye) || 0;
+                      const nonPaye = Number(item.nonPaye) || 0;
+                      const debt = nonPaye > 0 ? nonPaye : Math.max(0, loyer - paye);
+                      
+                      return (
+                        <tr key={idx} className="hover:bg-red-50 transition-colors">
+                          <td className="px-4 py-3 font-bold text-gray-900">
+                            {item.prenoms} {item.nom}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-gray-500">
+                            {formatAmount(loyer)} FCFA
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-green-600 font-bold">
+                            {formatAmount(paye)} FCFA
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-red-600 font-black bg-red-50/30">
+                            {formatAmount(debt)} FCFA
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => setShowUnpaidDetails({ isOpen: false, report: null })}
+                className="px-8 py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+              >
+                Fermer
+              </button>
+              <button
+                onClick={() => {
+                  handleEditClick(showUnpaidDetails.report);
+                  setShowUnpaidDetails({ isOpen: false, report: null });
+                }}
+                className="px-8 py-3 bg-blue-900 text-white rounded-2xl font-bold hover:bg-blue-800 transition-all shadow-lg"
+              >
+                Aller au tableau pour modifier
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );
