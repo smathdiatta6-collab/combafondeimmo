@@ -23,6 +23,7 @@ const AdminMonthlyReports: React.FC = () => {
   const navigate = useNavigate();
   const [reports, setReports] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [lastReportForBailleur, setLastReportForBailleur] = useState<any | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
@@ -1041,13 +1042,54 @@ const AdminMonthlyReports: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-700 ml-1">Chez (Bailleur)</label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                    value={newReport.chez}
-                    onChange={(e) => setNewReport({ ...newReport, chez: e.target.value })}
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      value={newReport.chez}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewReport({ ...newReport, chez: val });
+                        
+                        // Check if we have a previous report for this bailleur to offer import
+                        if (val.length > 2) {
+                          const lastOne = reports.find(r => 
+                            r.chez?.toLowerCase().trim() === val.toLowerCase().trim()
+                          );
+                          setLastReportForBailleur(lastOne || null);
+                        } else {
+                          setLastReportForBailleur(null);
+                        }
+                      }}
+                    />
+                    {lastReportForBailleur && newReport.items.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Voulez-vous importer les ${lastReportForBailleur.items.length} locataires du bilan "${lastReportForBailleur.mois}" pour ${lastReportForBailleur.chez} ?`)) {
+                            // Clone items but reset 'paye' and 'nonPaye'
+                            const importedItems = lastReportForBailleur.items.map((item: any) => {
+                              const base = { ...item };
+                              // Reset transient fields
+                              base.paye = 0;
+                              base.nonPaye = Number(item.loyer) || 0;
+                              return base;
+                            });
+                            setNewReport(prev => updateReportTotals({
+                              ...prev,
+                              items: importedItems,
+                              columns: lastReportForBailleur.columns || prev.columns 
+                            }));
+                            setLastReportForBailleur(null);
+                          }
+                        }}
+                        className="absolute right-2 top-2 bottom-2 px-4 bg-blue-900 text-white rounded-xl text-xs font-bold hover:bg-blue-800 transition-all flex items-center gap-2 shadow-lg animate-in fade-in slide-in-from-right-4"
+                      >
+                        <Plus size={14} /> Importer locataires de {lastReportForBailleur.mois}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-700 ml-1">Mois & Année</label>
