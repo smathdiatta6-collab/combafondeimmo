@@ -151,7 +151,6 @@ const AdminMonthlyReports: React.FC = () => {
         arreteSomme: `${words} ${currency} (${formatted})`
       };
     });
-    alert("Calcul automatique effectué pour les loyers, commissions et totaux.");
   };
 
   const evaluateFormula = (formula: string, item: any) => {
