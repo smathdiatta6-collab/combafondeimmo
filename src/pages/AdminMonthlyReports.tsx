@@ -121,28 +121,37 @@ const AdminMonthlyReports: React.FC = () => {
     const words = numberToWordsFrench(newReport.totalRemettre);
     const formatted = newReport.totalRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     const currency = newReport.reportCurrency?.trim() || 'FCFA';
+    const newArrete = `${words} ${currency} (${formatted})`;
     
-    setNewReport(prev => ({
-      ...prev,
-      arreteSomme: `${words} ${currency} (${formatted})`
-    }));
+    if (newReport.arreteSomme !== newArrete) {
+      setNewReport(prev => ({
+        ...prev,
+        arreteSomme: newArrete
+      }));
+    }
   }, [newReport.totalRemettre, newReport.reportCurrency]);
 
   const calculateTotals = () => {
-    const totalPaye = newReport.items.reduce((sum, item) => sum + (Number(item.paye) || 0), 0);
-    const commission = Math.round(totalPaye * (newReport.commissionPercentage / 100));
-    const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
-    const effectiveCommission = newReport.hideCommission ? 0 : commission;
-    const aRemettre = totalPaye - effectiveCommission - totalCustom;
-    
-    setNewReport(prev => ({
-      ...prev,
-      totalPaye: totalPaye,
-      totalCommission: commission,
-      totalRemettre: aRemettre,
-      isManualTotalRemettre: false,
-      isManualCommission: false
-    }));
+    setNewReport(prev => {
+      // Force manual flags to false then let updateReportTotals calculate everything
+      const reportWithFlagsReset = {
+        ...prev,
+        isManualTotalRemettre: false,
+        isManualCommission: false
+      };
+      const updated = updateReportTotals(reportWithFlagsReset);
+      
+      // Also update arreteSomme immediately to be consistent
+      const words = numberToWordsFrench(updated.totalRemettre);
+      const formatted = updated.totalRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      const currency = updated.reportCurrency?.trim() || 'FCFA';
+      
+      return {
+        ...updated,
+        arreteSomme: `${words} ${currency} (${formatted})`
+      };
+    });
+    alert("Calcul automatique effectué pour les loyers, commissions et totaux.");
   };
 
   const evaluateFormula = (formula: string, item: any) => {
@@ -151,7 +160,7 @@ const AdminMonthlyReports: React.FC = () => {
       // Sort keys by length descending to avoid partial replacements (e.g. 'amount' replacing 'amount_total')
       const keys = Object.keys(item).sort((a, b) => b.length - a.length);
       keys.forEach(key => {
-        const val = item[key] === '' || item[key] === undefined || item[key] === null ? 0 : item[key];
+        const val = getSafeNum(item[key]);
         // Use regex with word boundaries if it's alphanumeric, or literal replace
         const regex = new RegExp(`\\b${key}\\b`, 'g');
         expression = expression.replace(regex, val.toString());
@@ -176,15 +185,20 @@ const AdminMonthlyReports: React.FC = () => {
       let newItem = { ...item };
       report.columns.forEach(col => {
         if (col.formula && col.type === 'number') {
+          // Pass current item values to evaluateFormula
           newItem[col.id] = evaluateFormula(col.formula, newItem);
         }
       });
       return newItem;
     });
 
-    const totalPaye = updatedItems.reduce((sum, item) => sum + (Number(item.paye) || 0), 0);
+    // Dynamically find the column to use for paye (defaulting to 'paye' ID)
+    const payeCol = report.columns.find(c => c.id === 'paye' || c.label.toLowerCase() === 'payé' || c.label.toLowerCase() === 'paye');
+    const payeId = payeCol ? payeCol.id : 'paye';
+    
+    const totalPaye = updatedItems.reduce((sum, item) => sum + getSafeNum(item[payeId]), 0);
     const commission = Math.round(totalPaye * (report.commissionPercentage / 100));
-    const totalCustom = (report.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+    const totalCustom = (report.customRows || []).reduce((sum, row) => sum + getSafeNum(row.value), 0);
     
     const effectiveCommission = report.hideCommission ? 0 : (report.isManualCommission ? report.totalCommission : commission);
     const calculatedTotalRemettre = totalPaye - effectiveCommission - totalCustom;
@@ -204,6 +218,31 @@ const AdminMonthlyReports: React.FC = () => {
   ];
 
   const years = Array.from({ length: 11 }, (_, i) => (new Date().getFullYear() - 5 + i).toString());
+  
+  // Helper to get numeric value safely from any input
+  const getSafeNum = (val: any) => {
+    if (typeof val === 'number') return val;
+    if (!val || val === '') return 0;
+    
+    // Standardize decimals and remove thousands separators
+    // Handle spaces, dots as thousands, and commas as decimal or thousands
+    let cleaned = String(val).replace(/\s/g, '');
+    
+    // Heuristic: if there's a comma and it's followed by 3 digits, it's likely a thousands separator (EN style)
+    // If it's a French app, dot is often thousand, comma is decimal.
+    // 1.000 -> 1000
+    // 1.000.000 -> 1000000
+    // 1,500 -> 1.5 (if comma is decimal) or 1500 (if comma is thousand)
+    
+    // We'll treat both dots and commas as thousands separators IF they are followed by exactly 3 digits
+    cleaned = cleaned.replace(/[,.](?=\d{3}(?!\d))/g, '');
+    
+    // Remaining commas are treated as decimal points
+    cleaned = cleaned.replace(',', '.');
+    
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? 0 : n;
+  };
 
   const formatAmount = (val: number) => {
     return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -919,12 +958,12 @@ const AdminMonthlyReports: React.FC = () => {
                     <div className="bg-white/60 p-4 rounded-2xl text-xs text-blue-800 space-y-2 mb-2">
                       <p className="font-bold">✨ Fonctionnalités Excel :</p>
                       <ul className="list-disc ml-4 space-y-1">
-                        <li><strong>Formules :</strong> Ajoutez une formule dans une colonne (ex: <code className="bg-blue-100 px-1 rounded">montantLoyer - montantPaye</code>).</li>
+                        <li><strong>Formules :</strong> Ajoutez une formule dans une colonne (ex: <code className="bg-blue-100 px-1 rounded">loyer - paye</code>).</li>
                         <li><strong>Calcul rapide :</strong> Dans le tableau, tapez un calcul (ex: <code className="bg-blue-100 px-1 rounded">5000+2500</code>) puis sortez de la case.</li>
-                        <li><strong>Identifiants :</strong> Utilisez l'ID (ex: <code className="bg-blue-100 px-1 rounded">loyer_123</code>) pour vos formules.</li>
+                        <li><strong>Identifiants :</strong> Utilisez l'ID (ex: <code className="bg-blue-100 px-1 rounded">paye</code>) pour vos formules.</li>
                       </ul>
                     </div>
-                    <p className="text-[10px] text-blue-600 italic">* La colonne avec l'ID "montantPaye" est utilisée pour le calcul de la commission.</p>
+                    <p className="text-[10px] text-blue-600 italic">* La colonne avec l'ID "paye" est utilisée pour le calcul de la commission et du total à remettre.</p>
                     <div className="space-y-2">
                       {newReport.columns.map((col, index) => (
                         <div key={col.id} className="flex items-center gap-2 bg-white p-3 rounded-xl shadow-sm">
@@ -1273,7 +1312,7 @@ const AdminMonthlyReports: React.FC = () => {
                                           if (rawVal && (rawVal.includes('+') || rawVal.includes('-') || rawVal.includes('*') || rawVal.includes('/'))) {
                                             finalVal = evaluateFormula(rawVal, {});
                                           } else {
-                                            finalVal = rawVal === '' ? '' : parseFloat(rawVal) || 0;
+                                            finalVal = rawVal === '' ? '' : getSafeNum(rawVal);
                                           }
                                           
                                           setNewReport(prev => {
@@ -1541,7 +1580,7 @@ const AdminMonthlyReports: React.FC = () => {
                       className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-900"
                       value={newReport.totalPaye || 0}
                       onChange={(e) => {
-                        const val = parseFloat(e.target.value) || 0;
+                        const val = getSafeNum(e.target.value);
                         const commission = Math.round(val * (newReport.commissionPercentage / 100));
                         const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
                         const effectiveCommission = newReport.hideCommission ? 0 : commission;
@@ -1578,7 +1617,7 @@ const AdminMonthlyReports: React.FC = () => {
                                 className="w-32 px-3 py-1 bg-blue-50 border-none rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-700 text-sm"
                                 value={newReport.totalCommission || 0}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const val = getSafeNum(e.target.value);
                                   const totalPaye = newReport.totalPaye || 0;
                                   const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
                                   const currentManualTotalRemettre = newReport.isManualTotalRemettre;
@@ -1602,7 +1641,7 @@ const AdminMonthlyReports: React.FC = () => {
                           }`}
                           value={newReport.totalCommission || 0}
                           onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
+                            const val = getSafeNum(e.target.value);
                             const totalPaye = newReport.totalPaye || 0;
                             const totalCustom = (newReport.customRows || []).reduce((sum, row) => sum + (Number(row.value) || 0), 0);
                             const currentManualTotalRemettre = newReport.isManualTotalRemettre;
@@ -1634,7 +1673,7 @@ const AdminMonthlyReports: React.FC = () => {
                         : 'bg-gray-50 text-green-700 focus:ring-green-500'
                       }`}
                       value={newReport.totalRemettre || 0}
-                      onChange={(e) => setNewReport({ ...newReport, totalRemettre: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => setNewReport({ ...newReport, totalRemettre: getSafeNum(e.target.value) })}
                     />
                     {newReport.isManualTotalRemettre && (
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] bg-green-200 text-green-800 px-2 py-1 rounded-lg uppercase font-black">Manuel</span>
@@ -1705,7 +1744,7 @@ const AdminMonthlyReports: React.FC = () => {
                           type="number"
                           className="flex-1 px-4 py-3 bg-white border-none rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
                           value={customRowData.value}
-                          onChange={(e) => setCustomRowData({ ...customRowData, value: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => setCustomRowData({ ...customRowData, value: getSafeNum(e.target.value) })}
                         />
                         <input
                           type="text"
