@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { FileBarChart, Trash2, Plus, Minus, ArrowLeft, Download, UserPlus, X, Edit2, Search, Copy, Settings, ChevronUp, ChevronDown, Receipt, FileText } from 'lucide-react';
+import { 
+  FileBarChart, Trash2, Plus, Minus, ArrowLeft, Download, UserPlus, X, Edit2, Search, Copy, Settings, 
+  ChevronUp, ChevronDown, Receipt, FileText, RotateCcw, CheckCircle2, AlertCircle, AlertTriangle, 
+  Calendar, Building, DollarSign, TrendingUp, Filter, Users, User, ArrowRight 
+} from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { generateMonthlyReportPDF } from '../utils/pdfGenerator';
 import { generateMonthlyReportWord } from '../utils/wordGenerator';
@@ -42,6 +46,34 @@ const AdminMonthlyReports: React.FC = () => {
   const [isMergeMode, setIsMergeMode] = useState(false);
   const [mergeStart, setMergeStart] = useState<{ row: number, colIdx: number } | null>(null);
   const [mergeEnd, setMergeEnd] = useState<{ row: number, colIdx: number } | null>(null);
+
+  // Modern tracking tab states
+  const [activeTab, setActiveTab ] = useState<'bilans' | 'suivi'>('bilans');
+  const [suiviMonth, setSuiviMonth] = useState<string>(
+    ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][new Date().getMonth()]
+  );
+  const [suiviYear, setSuiviYear] = useState<string>(`${new Date().getFullYear()}`);
+  const [suiviBailleur, setSuiviBailleur] = useState<string>('all');
+  const [suiviSearch, setSuiviSearch] = useState<string>('');
+  const [suiviStatusFilter, setSuiviStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
+
+  // Quick Payment Editor Modal
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedTenantPayment, setSelectedTenantPayment] = useState<{
+    reportId: string;
+    itemIndex: number;
+    tenantName: string;
+    bailleurName: string;
+    mois: string;
+    loyer: number;
+    paye: number;
+    nonPaye: number;
+    currency: string;
+  } | null>(null);
+
+  // Yearly view states
+  const [suiviSubTab, setSuiviSubTab] = useState<'mensuel' | 'annuel'>('mensuel');
+  const [selectedTenantHistory, setSelectedTenantHistory] = useState<string>('');
 
   const defaultColumns: Column[] = [
     { id: 'prenoms', label: 'Prénoms', type: 'text' },
@@ -179,13 +211,15 @@ const AdminMonthlyReports: React.FC = () => {
   };
 
   const updateReportTotals = (report: typeof newReport) => {
-    // First, update any formula columns in items
+    // First, update any formula columns in items (unless manually overridden)
     const updatedItems = report.items.map(item => {
       let newItem = { ...item };
       report.columns.forEach(col => {
         if (col.formula && col.type === 'number') {
-          // Pass current item values to evaluateFormula
-          newItem[col.id] = evaluateFormula(col.formula, newItem);
+          // Pass current item values to evaluateFormula only if not manual override
+          if (!newItem[`_manual_${col.id}`]) {
+            newItem[col.id] = evaluateFormula(col.formula, newItem);
+          }
         }
       });
       return newItem;
@@ -708,6 +742,66 @@ const AdminMonthlyReports: React.FC = () => {
     }
   };
 
+  const handleQuickPaymentSave = async (reportId: string, itemIndex: number, newPayeAmount: number) => {
+    try {
+      const reportToUpdate = reports.find(r => r.id === reportId);
+      if (!reportToUpdate) return;
+
+      const updatedItems = [...reportToUpdate.items];
+      const parsedPaye = Number(newPayeAmount) || 0;
+      const originalItem = updatedItems[itemIndex];
+      const rent = getSafeNum(originalItem.loyer);
+      
+      const updatedItem = {
+        ...originalItem,
+        paye: parsedPaye,
+        nonPaye: rent - parsedPaye > 0 ? rent - parsedPaye : 0
+      };
+      
+      // If there's a custom manual overridden formula on nonPaye, mark or clear it to keep totals clean
+      delete updatedItem[`_manual_nonPaye`];
+      
+      updatedItems[itemIndex] = updatedItem;
+
+      const calculatedReport = updateReportTotals({
+        ...reportToUpdate,
+        items: updatedItems
+      });
+
+      const words = numberToWordsFrench(calculatedReport.totalRemettre);
+      const formatted = calculatedReport.totalRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      const currency = (calculatedReport.reportCurrency || 'FCFA').trim();
+      const arreteVal = `${words} ${currency} (${formatted})`;
+
+      const reportRef = doc(db, 'monthlyReports', reportId);
+      await updateDoc(reportRef, {
+        items: calculatedReport.items,
+        totalPaye: calculatedReport.totalPaye,
+        totalCommission: calculatedReport.totalCommission,
+        totalRemettre: calculatedReport.totalRemettre,
+        arreteSomme: arreteVal,
+        updatedAt: new Date().toISOString(),
+        updatedByName: user?.displayName || user?.email
+      });
+
+      // Update local state without waiting for re-fetch to feel extremely snappy!
+      setReports(prev => prev.map(r => r.id === reportId ? {
+        ...r,
+        items: calculatedReport.items,
+        totalPaye: calculatedReport.totalPaye,
+        totalCommission: calculatedReport.totalCommission,
+        totalRemettre: calculatedReport.totalRemettre,
+        arreteSomme: arreteVal
+      } : r));
+
+      setPaymentModalOpen(false);
+      setSelectedTenantPayment(null);
+    } catch (e) {
+      console.error(e);
+      alert('Erreur lors de la mise à jour du paiement');
+    }
+  };
+
   const filteredReports = reports.filter(report => {
     const searchLower = searchTerm.toLowerCase();
     const reportMonth = report.mois || '';
@@ -743,6 +837,178 @@ const AdminMonthlyReports: React.FC = () => {
       } 
     });
   };
+
+  // Accumulate all tenant payment items matching our filters
+  const accumulatedPayments = React.useMemo(() => {
+    const list: any[] = [];
+    
+    reports.forEach(report => {
+      const reportMonth = report.mois || '';
+      // Exclude copies or other unrelated entries if desired, but general month match is correct
+      const exactMonthMatch = reportMonth.toLowerCase().trim() === `${suiviMonth} ${suiviYear}`.toLowerCase().trim();
+      
+      if (!exactMonthMatch) return;
+      if (suiviBailleur !== 'all' && report.chez !== suiviBailleur) return;
+      
+      (report.items || []).forEach((item: any, idx: number) => {
+        const first = item.prenoms || '';
+        const last = item.nom || '';
+        const fullName = `${first} ${last}`.trim();
+        
+        // Search filter matching first or last name
+        if (suiviSearch && !fullName.toLowerCase().includes(suiviSearch.toLowerCase().trim())) {
+          return;
+        }
+        
+        const rent = getSafeNum(item.loyer);
+        const paid = getSafeNum(item.paye);
+        const unpaid = getSafeNum(item.nonPaye) > 0 ? getSafeNum(item.nonPaye) : Math.max(0, rent - paid);
+        
+        let status: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+        if (paid >= rent && rent > 0) {
+          status = 'paid';
+        } else if (paid > 0 && paid < rent) {
+          status = 'partial';
+        } else {
+          status = 'unpaid';
+        }
+        
+        list.push({
+          reportId: report.id,
+          itemIndex: idx,
+          prenoms: item.prenoms || '',
+          nom: item.nom || '',
+          fullName,
+          bailleurName: report.chez,
+          mois: report.mois,
+          loyer: rent,
+          paye: paid,
+          nonPaye: unpaid,
+          status,
+          currency: report.reportCurrency || ' FCFA',
+          villaNumber: report.villaNumber || item.villaNumber || item.villa || ''
+        });
+      });
+    });
+    
+    return list;
+  }, [reports, suiviMonth, suiviYear, suiviBailleur, suiviSearch, suiviStatusFilter]);
+
+  const trackingMetrics = React.useMemo(() => {
+    let totalLoyer = 0;
+    let totalPaid = 0;
+    let totalUnpaid = 0;
+    let countPaid = 0;
+    let countPartial = 0;
+    let countUnpaid = 0;
+    let totalCount = 0;
+    
+    reports.forEach(report => {
+      const reportMonth = report.mois || '';
+      const exactMonthMatch = reportMonth.toLowerCase().trim() === `${suiviMonth} ${suiviYear}`.toLowerCase().trim();
+      
+      if (!exactMonthMatch) return;
+      if (suiviBailleur !== 'all' && report.chez !== suiviBailleur) return;
+      
+      (report.items || []).forEach((item: any) => {
+        const rent = getSafeNum(item.loyer);
+        const paid = getSafeNum(item.paye);
+        const unpaid = getSafeNum(item.nonPaye) > 0 ? getSafeNum(item.nonPaye) : Math.max(0, rent - paid);
+        
+        totalLoyer += rent;
+        totalPaid += paid;
+        totalUnpaid += unpaid;
+        totalCount++;
+        
+        if (paid >= rent && rent > 0) {
+          countPaid++;
+        } else if (paid > 0 && paid < rent) {
+          countPartial++;
+        } else {
+          countUnpaid++;
+        }
+      });
+    });
+    
+    const recoveryRate = totalLoyer > 0 ? Math.round((totalPaid / totalLoyer) * 100) : 0;
+    
+    return {
+      totalLoyer,
+      totalPaid,
+      totalUnpaid,
+      totalCount,
+      countPaid,
+      countPartial,
+      countUnpaid,
+      recoveryRate
+    };
+  }, [reports, suiviMonth, suiviYear, suiviBailleur]);
+
+  // Compute unique tenant names across all history
+  const allUniqueTenantsList = React.useMemo(() => {
+    const names = new Set<string>();
+    reports.forEach(report => {
+      (report.items || []).forEach((item: any) => {
+        const name = `${item.prenoms || ''} ${item.nom || ''}`.trim();
+        if (name) names.add(name);
+      });
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [reports]);
+
+  // If there's no selected tenant history yet, select the first one in the list automatically
+  useEffect(() => {
+    if (!selectedTenantHistory && allUniqueTenantsList.length > 0) {
+      setSelectedTenantHistory(allUniqueTenantsList[0]);
+    }
+  }, [allUniqueTenantsList, selectedTenantHistory]);
+
+  // Aggregate payment status month by month for the chosen tenant in the chosen year
+  const tenantYearlyHistory = React.useMemo(() => {
+    if (!selectedTenantHistory) return [];
+    
+    const yearlyList = months.map(m => {
+      let loyer = 0;
+      let paye = 0;
+      let nonPaye = 0;
+      let found = false;
+      let bailleur = '';
+      
+      reports.forEach(report => {
+        if ((report.mois || '').toLowerCase().trim() === `${m} ${suiviYear}`.toLowerCase().trim()) {
+          (report.items || []).forEach((item: any) => {
+            const name = `${item.prenoms || ''} ${item.nom || ''}`.trim();
+            if (name.toLowerCase() === selectedTenantHistory.toLowerCase()) {
+              loyer = getSafeNum(item.loyer);
+              paye = getSafeNum(item.paye);
+              nonPaye = getSafeNum(item.nonPaye) > 0 ? getSafeNum(item.nonPaye) : Math.max(0, loyer - paye);
+              found = true;
+              bailleur = report.chez;
+            }
+          });
+        }
+      });
+      
+      let status: 'paid' | 'partial' | 'unpaid' | 'no_data' = 'no_data';
+      if (found) {
+        if (paye >= loyer && loyer > 0) status = 'paid';
+        else if (paye > 0) status = 'partial';
+        else status = 'unpaid';
+      }
+      
+      return {
+        monthName: m,
+        loyer,
+        paye,
+        nonPaye,
+        found,
+        status,
+        bailleur
+      };
+    });
+    
+    return yearlyList;
+  }, [reports, selectedTenantHistory, suiviYear]);
 
   if (loading) return <div className="pt-32 text-center">Chargement...</div>;
   if (!user || !isAdmin) return <Navigate to="/" />;
@@ -805,54 +1071,83 @@ const AdminMonthlyReports: React.FC = () => {
           </button>
         </div>
 
-        <div className="mb-12 space-y-4">
-          <div className="relative max-w-4xl mx-auto flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Rechercher par bailleur, locataire..."
-                className="w-full pl-14 pr-6 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            
-            <div className="flex gap-4 w-full md:w-auto">
-              <select
-                className="flex-1 md:w-40 px-4 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-700"
-                value={filterMonth}
-                onChange={(e) => setFilterMonth(e.target.value)}
-              >
-                <option value="">Tous les mois</option>
-                {months.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
+        {/* Modern navigation Tab Switcher */}
+        <div className="flex bg-gray-100 p-1.5 rounded-2xl max-w-md mb-12 gap-1 shadow-inner border border-gray-150">
+          <button
+            onClick={() => setActiveTab('bilans')}
+            type="button"
+            className={`flex-1 py-3 text-center font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'bilans'
+                ? 'bg-white text-blue-950 shadow-sm'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-white/40'
+            }`}
+          >
+            <FileBarChart size={18} />
+            Bilans & Factures
+          </button>
+          <button
+            onClick={() => setActiveTab('suivi')}
+            type="button"
+            className={`flex-1 py-3 text-center font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'suivi'
+                ? 'bg-white text-blue-950 shadow-sm font-black'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-white/40'
+            }`}
+          >
+            <CheckCircle2 size={18} className={activeTab === 'suivi' ? 'text-green-600' : ''} />
+            Suivi des Paiements
+          </button>
+        </div>
+        {activeTab === 'bilans' && (
+          <div className="mb-12 space-y-4">
+            <div className="relative max-w-4xl mx-auto flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="Rechercher par bailleur, locataire..."
+                  className="w-full pl-14 pr-6 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
               
-              <select
-                className="flex-1 md:w-32 px-4 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-700"
-                value={filterYear}
-                onChange={(e) => setFilterYear(e.target.value)}
-              >
-                <option value="">Toutes les années</option>
-                {years.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-              
-              {(filterMonth || filterYear || searchTerm) && (
-                <button
-                  onClick={() => {
-                    setFilterMonth('');
-                    setFilterYear('');
-                    setSearchTerm('');
-                  }}
-                  className="px-6 py-4 bg-gray-200 text-gray-600 rounded-2xl hover:bg-gray-300 transition-all font-bold"
-                  title="Réinitialiser les filtres"
+              <div className="flex gap-4 w-full md:w-auto">
+                <select
+                  className="flex-1 md:w-40 px-4 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-700"
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
                 >
-                  <X size={20} />
-                </button>
-              )}
+                  <option value="">Tous les mois</option>
+                  {months.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                
+                <select
+                  className="flex-1 md:w-32 px-4 py-4 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-700"
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(e.target.value)}
+                >
+                  <option value="">Toutes les années</option>
+                  {years.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                
+                {(filterMonth || filterYear || searchTerm) && (
+                  <button
+                    onClick={() => {
+                      setFilterMonth('');
+                      setFilterYear('');
+                      setSearchTerm('');
+                    }}
+                    className="px-6 py-4 bg-gray-200 text-gray-600 rounded-2xl hover:bg-gray-300 transition-all font-bold"
+                    title="Réinitialiser les filtres"
+                  >
+                    <X size={20} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <Modal
           isOpen={isAdding}
@@ -1276,7 +1571,7 @@ const AdminMonthlyReports: React.FC = () => {
                                     }
                                   }}
                                 >
-                                  <div className="relative">
+                                  <div className="relative group/input flex items-center justify-end w-full">
                                     <input
                                       type="text"
                                       className={`w-full border border-transparent hover:border-blue-200 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 rounded-xl px-3 py-2 transition-all ${
@@ -1285,14 +1580,19 @@ const AdminMonthlyReports: React.FC = () => {
                                         col.type === 'number' && !newReport.centerText ? 'text-right' : 
                                         newReport.centerText ? 'text-center' : 'text-left'
                                       } ${col.type === 'number' ? 'font-mono font-bold text-blue-900' : 'text-gray-700'} ${
-                                        col.formula ? 'bg-gray-100 cursor-not-allowed opacity-80' : 'bg-white/50'
+                                        col.formula 
+                                          ? item[`_manual_${col.id}`]
+                                            ? 'bg-amber-50/70 border-amber-200 text-amber-900 focus:bg-white font-bold' 
+                                            : 'bg-blue-50/40 text-blue-900 border-dashed border-blue-100 font-bold hover:bg-blue-50/70' 
+                                          : 'bg-white/50'
                                       } ${
                                         newReport.tableFontSize === 'small' ? 'text-xs px-2 py-1' : 
                                         newReport.tableFontSize === 'large' ? 'text-base py-3' : 'text-sm'
-                                      }`}
+                                      } ${col.formula && item[`_manual_${col.id}`] ? 'pr-8' : ''}`}
                                       value={item[col.id] ?? (col.type === 'number' ? 0 : '')}
-                                      readOnly={!!col.formula || isMergeMode}
-                                      placeholder={col.formula ? `[Calculé]` : ''}
+                                      readOnly={isMergeMode}
+                                      placeholder={col.formula ? `[Auto]` : ''}
+                                      title={col.formula ? (item[`_manual_${col.id}`] ? "Saisie manuelle pour remplacer la formule. Effacez ou cliquez sur réinitialiser pour revenir au calcul automatique." : `Calcul automatique: ${col.formula}. Modifiez pour forcer manuellement.`) : ""}
                                       onChange={(e) => {
                                         const updatedItems = [...newReport.items];
                                         const rawVal = e.target.value;
@@ -1300,14 +1600,31 @@ const AdminMonthlyReports: React.FC = () => {
                                           ...updatedItems[idx], 
                                           [col.id]: rawVal
                                         };
+                                        if (col.formula) {
+                                          if (rawVal === '') {
+                                            delete updatedItems[idx][`_manual_${col.id}`];
+                                          } else {
+                                            updatedItems[idx][`_manual_${col.id}`] = true;
+                                          }
+                                        }
                                         setNewReport(prev => ({ ...prev, items: updatedItems }));
                                       }}
                                       onBlur={(e) => {
-                                        if (col.type === 'number' && !col.formula) {
+                                        if (col.type === 'number') {
                                           const rawVal = e.target.value;
                                           let finalVal: any = rawVal;
                                           
-                                          // If it contains math operators, evaluate it
+                                          if (col.formula && rawVal.trim() === '') {
+                                            setNewReport(prev => {
+                                              const updatedItems = [...prev.items];
+                                              const updatedItem = { ...updatedItems[idx], [col.id]: '' };
+                                              delete updatedItem[`_manual_${col.id}`];
+                                              updatedItems[idx] = updatedItem;
+                                              return updateReportTotals({ ...prev, items: updatedItems });
+                                            });
+                                            return;
+                                          }
+                                          
                                           if (rawVal && (rawVal.includes('+') || rawVal.includes('-') || rawVal.includes('*') || rawVal.includes('/'))) {
                                             finalVal = evaluateFormula(rawVal, {});
                                           } else {
@@ -1316,7 +1633,11 @@ const AdminMonthlyReports: React.FC = () => {
                                           
                                           setNewReport(prev => {
                                             const updatedItems = [...prev.items];
-                                            updatedItems[idx] = { ...updatedItems[idx], [col.id]: finalVal };
+                                            const updatedItem = { ...updatedItems[idx], [col.id]: finalVal };
+                                            if (col.formula) {
+                                              updatedItem[`_manual_${col.id}`] = true;
+                                            }
+                                            updatedItems[idx] = updatedItem;
                                             return updateReportTotals({ ...prev, items: updatedItems });
                                           });
                                         } else {
@@ -1324,6 +1645,26 @@ const AdminMonthlyReports: React.FC = () => {
                                         }
                                       }}
                                     />
+
+                                    {/* Manual mode indicator with Reset button */}
+                                    {col.formula && item[`_manual_${col.id}`] && !isMergeMode && (
+                                      <button
+                                        type="button"
+                                        title="Réinitialiser en calcul de formule automatique"
+                                        onClick={() => {
+                                          setNewReport(prev => {
+                                            const updatedItems = [...prev.items];
+                                            const updatedItem = { ...updatedItems[idx], [col.id]: '' };
+                                            delete updatedItem[`_manual_${col.id}`];
+                                            updatedItems[idx] = updatedItem;
+                                            return updateReportTotals({ ...prev, items: updatedItems });
+                                          });
+                                        }}
+                                        className="absolute right-2 text-amber-500 hover:text-amber-700 bg-amber-100 hover:bg-amber-200 p-1 rounded-md transition-all z-10"
+                                      >
+                                        <RotateCcw size={12} />
+                                      </button>
+                                    )}
                                     
                                     {/* Quick Unmerge (Shown on cell group hover only if merged) */}
                                     {(currentSpan.rowSpan > 1 || currentSpan.colSpan > 1) && !isMergeMode && (
@@ -1885,119 +2226,660 @@ const AdminMonthlyReports: React.FC = () => {
           </div>
         </Modal>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredReports.map((report) => (
-            <div key={report.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between group hover:shadow-xl transition-all">
-              <div>
-                <div className="flex justify-between items-start mb-6">
-                  <div className="w-14 h-14 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center relative">
-                    <FileBarChart size={28} />
-                    {getUnpaidTenants(report).unpaid.length > 0 && (
-                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full border-2 border-white shadow-sm" title={`${getUnpaidTenants(report).unpaid.length} locataires n'ont pas encore payé`}>
-                        {getUnpaidTenants(report).unpaid.length}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleDuplicate(report)}
-                      className="text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Dupliquer le bilan"
-                    >
-                      <Copy size={20} />
-                    </button>
-                    <button
-                      onClick={() => handleEditClick(report)}
-                      className="text-gray-400 hover:text-orange-600 transition-colors"
-                      title="Modifier le bilan"
-                    >
-                      <Edit2 size={20} />
-                    </button>
-                    <button
-                      onClick={() => generateMonthlyReportPDF(report)}
-                      className="text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Télécharger PDF"
-                    >
-                      <Download size={20} />
-                    </button>
-                    <button
-                      onClick={() => generateMonthlyReportWord(report)}
-                      className="text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Télécharger Word"
-                    >
-                      <FileText size={20} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteReport(report.id)}
-                      className="text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Chez {report.chez}</h3>
-                <p className="text-orange-600 font-bold text-sm mb-4">{report.mois}</p>
-                
-                {/* Payment Summary Badge */}
-                {(() => {
-                  const { unpaid, totalDebt } = getUnpaidTenants(report);
-                  if (unpaid.length === 0) {
-                    return (
-                      <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold mb-4">
-                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        Tout payé
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="space-y-2 mb-4">
-                      <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                        {unpaid.length} Impayé{unpaid.length > 1 ? 's' : ''}
-                      </div>
-                      <p className="text-xs font-bold text-red-600">Total dû : {formatAmount(totalDebt)} FCFA</p>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowUnpaidDetails({ isOpen: true, report });
-                        }}
-                        className="text-[10px] font-bold text-red-700 underline hover:text-red-900 transition-colors"
+        {activeTab === 'bilans' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredReports.map((report) => (
+              <div key={report.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between group hover:shadow-xl transition-all">
+                <div>
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="w-14 h-14 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center relative">
+                      <FileBarChart size={28} />
+                      {getUnpaidTenants(report).unpaid.length > 0 && (
+                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full border-2 border-white shadow-sm" title={`${getUnpaidTenants(report).unpaid.length} locataires n'ont pas encore payé`}>
+                          {getUnpaidTenants(report).unpaid.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDuplicate(report)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Dupliquer le bilan"
                       >
-                        Voir qui n'a pas payé ({unpaid.length})
+                        <Copy size={20} />
+                      </button>
+                      <button
+                        onClick={() => handleEditClick(report)}
+                        className="text-gray-400 hover:text-orange-600 transition-colors"
+                        title="Modifier le bilan"
+                      >
+                        <Edit2 size={20} />
+                      </button>
+                      <button
+                        onClick={() => generateMonthlyReportPDF(report)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Télécharger PDF"
+                      >
+                        <Download size={20} />
+                      </button>
+                      <button
+                        onClick={() => generateMonthlyReportWord(report)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Télécharger Word"
+                      >
+                        <FileText size={20} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteReport(report.id)}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={20} />
                       </button>
                     </div>
-                  );
-                })()}
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Chez {report.chez}</h3>
+                  <p className="text-orange-600 font-bold text-sm mb-4">{report.mois}</p>
+                  
+                  {/* Payment Summary Badge */}
+                  {(() => {
+                    const { unpaid, totalDebt } = getUnpaidTenants(report);
+                    if (unpaid.length === 0) {
+                      return (
+                        <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold mb-4">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          Tout payé
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="space-y-2 mb-4">
+                        <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                          {unpaid.length} Impayé{unpaid.length > 1 ? 's' : ''}
+                        </div>
+                        <p className="text-xs font-bold text-red-600">Total dû : {formatAmount(totalDebt)} FCFA</p>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowUnpaidDetails({ isOpen: true, report });
+                          }}
+                          className="text-[10px] font-bold text-red-700 underline hover:text-red-900 transition-colors"
+                        >
+                          Voir qui n'a pas payé ({unpaid.length})
+                        </button>
+                      </div>
+                    );
+                  })()}
 
-                <div className="space-y-2 text-sm text-gray-500">
-                  <p>Commission: {report.commissionInWords ? <span className="text-indigo-600 font-bold italic">"{report.commissionWords}"</span> : `${formatAmount(report.totalCommission)} FCFA`}</p>
-                  <p>À remettre: {formatAmount(report.totalRemettre)} FCFA</p>
-                  <p>Date: {report.date}</p>
+                  <div className="space-y-2 text-sm text-gray-500">
+                    <p>Commission: {report.commissionInWords ? <span className="text-indigo-600 font-bold italic">"{report.commissionWords}"</span> : `${formatAmount(report.totalCommission)} FCFA`}</p>
+                    <p>À remettre: {formatAmount(report.totalRemettre)} FCFA</p>
+                    <p>Date: {report.date}</p>
+                  </div>
+                </div>
+                <div className="mt-6 pt-6 border-t border-gray-50 space-y-3">
+                  <button
+                    onClick={() => generateMonthlyReportPDF(report)}
+                    className="w-full text-blue-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
+                  >
+                    Télécharger Bilan PDF <Download size={16} />
+                  </button>
+                  <button
+                    onClick={() => generateMonthlyReportWord(report)}
+                    className="w-full text-blue-800 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
+                  >
+                    Télécharger Bilan Word <FileText size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleGenerateReceipts(report)}
+                    className="w-full text-orange-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
+                  >
+                    Générer les Quittances <Receipt size={16} />
+                  </button>
                 </div>
               </div>
-              <div className="mt-6 pt-6 border-t border-gray-50 space-y-3">
+            ))}
+          </div>
+        )}
+
+        {/* --- SUIVI DES PAYEMENTS WORKSPACE --- */}
+        {activeTab === 'suivi' && (
+          <div className="space-y-8">
+            {/* Sub-tab choice: Mensuel vs Annuel Heatmap */}
+            <div className="flex gap-4 border-b border-gray-200 pb-2">
+              <button
+                type="button"
+                onClick={() => setSuiviSubTab('mensuel')}
+                className={`pb-2 px-4 text-sm font-bold transition-all relative ${
+                  suiviSubTab === 'mensuel' 
+                    ? 'text-blue-900 border-b-2 border-blue-950 font-black' 
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                Tableau de Bord Mensuel
+              </button>
+              <button
+                type="button"
+                onClick={() => setSuiviSubTab('annuel')}
+                className={`pb-2 px-4 text-sm font-bold transition-all relative ${
+                  suiviSubTab === 'annuel' 
+                    ? 'text-blue-900 border-b-2 border-blue-950 font-black' 
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                Historique par Locataire
+              </button>
+            </div>
+
+            {suiviSubTab === 'mensuel' ? (
+              <>
+                {/* 1. FILTERS & CONTROLS FOR SUIVI MENSUEL */}
+                <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col gap-6">
+                  <div className="flex flex-wrap gap-4 items-center justify-between">
+                    <div className="flex items-center gap-2 text-gray-800 font-bold">
+                      <Filter size={18} className="text-blue-900" />
+                      <span>Filtres de Suivi</span>
+                    </div>
+                    {/* Reset Filters button */}
+                    {(suiviSearch || suiviBailleur !== 'all' || suiviStatusFilter !== 'all') && (
+                      <button
+                        onClick={() => {
+                          setSuiviSearch('');
+                          setSuiviBailleur('all');
+                          setSuiviStatusFilter('all');
+                        }}
+                        className="text-xs text-blue-600 hover:underline font-bold"
+                      >
+                        Réinitialiser tous les filtres
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Search Field */}
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <input
+                        type="text"
+                        placeholder="Rechercher locataire..."
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all text-gray-700"
+                        value={suiviSearch}
+                        onChange={(e) => setSuiviSearch(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Bailleur Dropdown */}
+                    <div className="relative">
+                      <select
+                        className="w-full pl-4 pr-8 py-3 bg-gray-50 border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold text-gray-700 appearance-none"
+                        value={suiviBailleur}
+                        onChange={(e) => setSuiviBailleur(e.target.value)}
+                      >
+                        <option value="all">Tous les Bailleurs</option>
+                        {Array.from(new Set(reports.map(r => r.chez).filter(Boolean))).map(b => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                    </div>
+
+                    {/* Month Dropdown */}
+                    <div className="relative">
+                      <select
+                        className="w-full pl-4 pr-8 py-3 bg-gray-50 border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-900 appearance-none bg-blue-50/50 mr-2"
+                        value={suiviMonth}
+                        onChange={(e) => setSuiviMonth(e.target.value)}
+                      >
+                        {months.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900 pointer-events-none" size={16} />
+                    </div>
+
+                    {/* Year Dropdown */}
+                    <div className="relative">
+                      <select
+                        className="w-full pl-4 pr-8 py-3 bg-gray-50 border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-900 appearance-none bg-blue-50/50 mr-2"
+                        value={suiviYear}
+                        onChange={(e) => setSuiviYear(e.target.value)}
+                      >
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900 pointer-events-none" size={16} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. STATS SUMMARY CARDS */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {/* Card 1: Taux Recouvrement */}
+                  <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Taux de Recouvrement</p>
+                      <p className="text-3xl font-black text-blue-900">{trackingMetrics.recoveryRate}%</p>
+                      <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                        <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${trackingMetrics.recoveryRate}%` }} />
+                      </div>
+                    </div>
+                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
+                      <TrendingUp size={24} />
+                    </div>
+                  </div>
+
+                  {/* Card 2: Total Loyer Attendu */}
+                  <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Total Attendu</p>
+                      <p className="text-2xl font-black text-gray-900">{formatAmount(trackingMetrics.totalLoyer)} <span className="text-xs text-gray-400 font-bold">FCFA</span></p>
+                      <p className="text-xs text-gray-450">{trackingMetrics.totalCount} locataires inscrits</p>
+                    </div>
+                    <div className="w-12 h-12 bg-gray-100 text-gray-600 rounded-2xl flex items-center justify-center">
+                      <Building size={24} />
+                    </div>
+                  </div>
+
+                  {/* Card 3: Total Encaissé */}
+                  <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Total Encaissé</p>
+                      <p className="text-2xl font-black text-green-700">{formatAmount(trackingMetrics.totalPaid)} <span className="text-xs text-green-500 font-bold">FCFA</span></p>
+                      <p className="text-xs text-green-600 font-semibold">{trackingMetrics.countPaid} règlements complets</p>
+                    </div>
+                    <div className="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center">
+                      <CheckCircle2 size={24} />
+                    </div>
+                  </div>
+
+                  {/* Card 4: Total Restant Dû */}
+                  <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Reste à Recouvrer</p>
+                      <p className="text-2xl font-black text-red-600">{formatAmount(trackingMetrics.totalUnpaid)} <span className="text-xs text-red-400 font-bold">FCFA</span></p>
+                      <p className="text-xs text-red-500 font-semibold">{trackingMetrics.countUnpaid + trackingMetrics.countPartial} restant d'impôt/dette</p>
+                    </div>
+                    <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center">
+                      <AlertCircle size={24} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Segment Filters */}
+                <div className="flex gap-2 bg-gray-150 p-1.5 rounded-2xl max-w-lg">
+                  <button
+                    onClick={() => setSuiviStatusFilter('all')}
+                    className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition-all ${
+                      suiviStatusFilter === 'all' 
+                        ? 'bg-white text-blue-900 shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    Tous ({trackingMetrics.totalCount})
+                  </button>
+                  <button
+                    onClick={() => setSuiviStatusFilter('paid')}
+                    className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition-all ${
+                      suiviStatusFilter === 'paid' 
+                        ? 'bg-green-600 text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-green-600'
+                    }`}
+                  >
+                    Payés ({trackingMetrics.countPaid})
+                  </button>
+                  <button
+                    onClick={() => setSuiviStatusFilter('partial')}
+                    className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition-all ${
+                      suiviStatusFilter === 'partial' 
+                        ? 'bg-amber-500 text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-amber-600'
+                    }`}
+                  >
+                    Partiels ({trackingMetrics.countPartial})
+                  </button>
+                  <button
+                    onClick={() => setSuiviStatusFilter('unpaid')}
+                    className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition-all ${
+                      suiviStatusFilter === 'unpaid' 
+                        ? 'bg-red-500 text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-red-600'
+                    }`}
+                  >
+                    Non Payés ({trackingMetrics.countUnpaid})
+                  </button>
+                </div>
+
+                {/* 3. PAYMENTS TABLE */}
+                <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="p-8 border-b border-gray-50 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xl font-bold text-gray-900 font-sans">Suivi des règlements d'honoraires</h4>
+                      <p className="text-xs text-gray-400 mt-1">Saisissez les règlements pour ajuster en direct le bilan du bailleur lié.</p>
+                    </div>
+                    <span className="text-xs bg-blue-50 text-blue-800 px-3 py-1.5 rounded-full font-bold">
+                      {accumulatedPayments.length} locataire{accumulatedPayments.length > 1 ? 's' : ''} indexé{accumulatedPayments.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {accumulatedPayments.length === 0 ? (
+                    <div className="p-16 text-center text-gray-400 font-medium">
+                      <Users size={48} className="mx-auto text-gray-200 mb-4" />
+                      Aucun règlement ou locataire trouvé pour les filtres actifs.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto font-sans">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase font-bold tracking-wider border-b border-gray-100">
+                            <th className="px-8 py-5">Locataire & Propriété</th>
+                            <th className="px-8 py-5">Bailleur lié</th>
+                            <th className="px-8 py-5 text-right">Loyer Attendu</th>
+                            <th className="px-8 py-5 text-right">Montant Réglé</th>
+                            <th className="px-8 py-5 text-right">Solde Restante</th>
+                            <th className="px-8 py-5 text-center">Progression</th>
+                            <th className="px-8 py-5 text-center">Statut</th>
+                            <th className="px-8 py-5 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 text-sm">
+                          {accumulatedPayments.map((p, idx) => {
+                            const pct = p.loyer > 0 ? Math.min(100, Math.round((p.paye / p.loyer) * 100)) : 0;
+                            return (
+                              <tr key={`${p.reportId}_${p.itemIndex}_${idx}`} className="hover:bg-blue-50/10 transition-colors">
+                                <td className="px-8 py-5">
+                                  <div className="font-bold text-gray-900">{p.fullName}</div>
+                                  <div className="text-xs text-gray-400 font-semibold flex items-center gap-1.5 mt-0.5 font-mono">
+                                    <Building size={12} />
+                                    {p.villaNumber ? `Villa ${p.villaNumber}` : 'Local non spécifié'}
+                                  </div>
+                                </td>
+                                <td className="px-8 py-5 font-bold text-gray-600">
+                                  Chez {p.bailleurName}
+                                </td>
+                                <td className="px-8 py-5 text-right font-mono font-bold text-gray-700">
+                                  {formatAmount(p.loyer)} {p.currency.trim()}
+                                </td>
+                                <td className="px-8 py-5 text-right font-mono font-bold text-green-700 bg-green-50/10">
+                                  {formatAmount(p.paye)} {p.currency.trim()}
+                                </td>
+                                <td className="px-8 py-5 text-right font-mono font-bold text-red-600 bg-red-50/10">
+                                  {formatAmount(p.nonPaye)} {p.currency.trim()}
+                                </td>
+                                <td className="px-8 py-5 text-center">
+                                  <div className="flex flex-col items-center gap-1">
+                                    <span className="text-[10px] font-mono font-bold text-gray-500">{pct}%</span>
+                                    <div className="w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                      <div 
+                                        className={`h-full rounded-full transition-all ${
+                                          p.status === 'paid' ? 'bg-green-500' : p.status === 'partial' ? 'bg-amber-400' : 'bg-red-450'
+                                        }`} 
+                                        style={{ width: `${pct}%` }} 
+                                      />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-8 py-5 text-center">
+                                  {p.status === 'paid' && (
+                                    <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full font-bold">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                      Payé
+                                    </span>
+                                  )}
+                                  {p.status === 'partial' && (
+                                    <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                      Partiel
+                                    </span>
+                                  )}
+                                  {p.status === 'unpaid' && (
+                                    <span className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-bold">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                      Non payé
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-8 py-5 text-right">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedTenantPayment({
+                                        reportId: p.reportId,
+                                        itemIndex: p.itemIndex,
+                                        tenantName: p.fullName,
+                                        bailleurName: p.bailleurName,
+                                        mois: p.mois,
+                                        loyer: p.loyer,
+                                        paye: p.paye,
+                                        nonPaye: p.nonPaye,
+                                        currency: p.currency
+                                      });
+                                      setPaymentModalOpen(true);
+                                    }}
+                                    className="bg-blue-900/10 text-blue-950 hover:bg-blue-900 hover:text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all"
+                                  >
+                                    Enregistrer
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* ANNUAL HEATMAP SECTION */
+              <div className="space-y-8">
+                <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6 justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-100 text-blue-900 rounded-2xl flex items-center justify-center">
+                      <User size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold font-sans text-gray-900">Suivi Annuel par Locataire</h4>
+                      <p className="text-xs text-gray-500">Choisissez un locataire pour obtenir un relevé d'activité complet.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 w-full md:w-auto">
+                    {/* Tenant Selector */}
+                    <div className="relative flex-1 md:w-64">
+                      <select
+                        className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold text-gray-700 appearance-none pr-8"
+                        value={selectedTenantHistory}
+                        onChange={(e) => setSelectedTenantHistory(e.target.value)}
+                      >
+                        <option value="">-- Choisir un Locataire --</option>
+                        {allUniqueTenantsList.map(name => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-450 pointer-events-none" size={16} />
+                    </div>
+
+                    {/* Year Selector */}
+                    <div className="relative w-28 bg-blue-50/20 rounded-xl">
+                      <select
+                        className="w-full px-4 py-3 bg-transparent border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-900 appearance-none pr-8"
+                        value={suiviYear}
+                        onChange={(e) => setSuiviYear(e.target.value)}
+                      >
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900 pointer-events-none" size={16} />
+                    </div>
+                  </div>
+                </div>
+
+                {selectedTenantHistory ? (
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-2xl font-black text-gray-900 flex items-center gap-2 font-sans">
+                        <span>{selectedTenantHistory}</span>
+                        <ArrowRight size={18} className="text-gray-400" />
+                        <span className="text-blue-900 font-bold">{suiviYear}</span>
+                      </h5>
+                    </div>
+
+                    {/* 12 Months Status Blocks Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 font-sans">
+                      {tenantYearlyHistory.map(th => (
+                        <div 
+                          key={th.monthName} 
+                          className={`p-6 rounded-3xl border flex flex-col justify-between h-44 transition-all ${
+                            th.status === 'paid' 
+                              ? 'bg-green-50/50 border-green-200 hover:bg-green-50 shadow-sm shadow-green-100/30' 
+                              : th.status === 'partial'
+                              ? 'bg-amber-50/50 border-amber-200 hover:bg-amber-50 shadow-sm shadow-amber-100/30'
+                              : th.status === 'unpaid'
+                              ? 'bg-red-50/50 border-red-200 hover:bg-red-50 border-dashed shadow-sm shadow-red-100/20'
+                              : 'bg-gray-50/50 border-gray-200 opacity-60'
+                          }`}
+                        >
+                          <div>
+                            <p className="font-extrabold text-lg text-gray-950">{th.monthName}</p>
+                            {th.found && (
+                              <p className="text-[10px] text-gray-400 font-bold mt-0.5 truncate">Chez {th.bailleur}</p>
+                            )}
+                          </div>
+                          
+                          <div className="space-y-2">
+                            {th.found ? (
+                              <>
+                                <div className="space-y-0.5">
+                                  <p className="text-[10px] text-gray-400 font-semibold uppercase">Payé / Loyer</p>
+                                  <p className="text-xs font-mono font-black text-gray-700">
+                                    {formatAmount(th.paye)} / {formatAmount(th.loyer)}
+                                  </p>
+                                </div>
+                                
+                                {th.status === 'paid' && (
+                                  <span className="inline-flex self-start items-center gap-1 bg-green-100 text-green-800 text-[10px] px-2 py-0.5 rounded-full font-black">
+                                    Réglé
+                                  </span>
+                                )}
+                                {th.status === 'partial' && (
+                                  <span className="inline-flex self-start items-center bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-black">
+                                    Dû: {formatAmount(th.nonPaye)}
+                                  </span>
+                                )}
+                                {th.status === 'unpaid' && (
+                                  <span className="inline-flex self-start items-center bg-red-100 text-red-800 text-[10px] px-2 py-0.5 rounded-full font-black">
+                                    Non Payé
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <p className="text-xs text-gray-400 italic">Aucune fiche</p>
+                                <span className="inline-flex items-center bg-gray-100 text-gray-500 text-[9px] px-2 py-0.5 rounded-full font-bold">
+                                  Inactif
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 text-center text-gray-400 font-medium h-48 flex flex-col items-center justify-center">
+                    Veuillez choisir un locataire dans la liste ci-dessus pour inspecter ses records annuels.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Modal-like inline form to Record Quick Payments from Suivi list */}
+        {paymentModalOpen && selectedTenantPayment && (
+          <Modal
+            isOpen={paymentModalOpen}
+            onClose={() => {
+              setPaymentModalOpen(false);
+              setSelectedTenantPayment(null);
+            }}
+            title={`Enregistrer un Paiement - ${selectedTenantPayment.tenantName}`}
+          >
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleQuickPaymentSave(selectedTenantPayment.reportId, selectedTenantPayment.itemIndex, selectedTenantPayment.paye);
+            }} className="space-y-6 font-sans">
+              <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100">
+                <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Locataire</span>
+                    <p className="font-extrabold text-blue-950 text-base">{selectedTenantPayment.tenantName}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Bailleur</span>
+                    <p className="font-extrabold text-blue-950 text-base">Chez {selectedTenantPayment.bailleurName}</p>
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Mois</span>
+                    <p className="font-extrabold text-blue-150 text-base">{selectedTenantPayment.mois}</p>
+                  </div>
+                  <div className="mt-2 text-right">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Loyer Attendu</span>
+                    <p className="font-black text-gray-950 text-base">
+                      {formatAmount(selectedTenantPayment.loyer)} {selectedTenantPayment.currency.trim()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-gray-700 block">Saisir le Montant Payé ({selectedTenantPayment.currency.trim()})</label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-4 font-black text-blue-950 text-lg">💰</span>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      className="w-full pl-11 pr-5 py-4 bg-gray-100 border border-transparent hover:border-blue-200 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 rounded-2xl outline-none transition-all font-bold text-lg text-blue-950"
+                      value={selectedTenantPayment.paye === 0 ? '' : selectedTenantPayment.paye}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setSelectedTenantPayment({
+                          ...selectedTenantPayment,
+                          paye: val,
+                          nonPaye: selectedTenantPayment.loyer - val > 0 ? selectedTenantPayment.loyer - val : 0
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100/50 flex justify-between items-center text-xs">
+                  <span className="text-gray-500 font-medium">Reste dû calculé après enregistrement:</span>
+                  <span className={`font-black tracking-wide text-sm ${selectedTenantPayment.nonPaye > 0 ? 'text-red-600' : 'text-green-700'}`}>
+                    {formatAmount(selectedTenantPayment.nonPaye)} {selectedTenantPayment.currency.trim()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
                 <button
-                  onClick={() => generateMonthlyReportPDF(report)}
-                  className="w-full text-blue-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
+                  type="button"
+                  onClick={() => {
+                    setPaymentModalOpen(false);
+                    setSelectedTenantPayment(null);
+                  }}
+                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all font-bold"
                 >
-                  Télécharger Bilan PDF <Download size={16} />
+                  Annuler
                 </button>
                 <button
-                  onClick={() => generateMonthlyReportWord(report)}
-                  className="w-full text-blue-800 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
+                  type="submit"
+                  className="px-6 py-3 bg-blue-900 text-white rounded-xl font-bold hover:bg-blue-800 transition-all shadow-lg flex items-center gap-2"
                 >
-                  Télécharger Bilan Word <FileText size={16} />
-                </button>
-                <button
-                  onClick={() => handleGenerateReceipts(report)}
-                  className="w-full text-orange-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
-                >
-                  Générer les Quittances <Receipt size={16} />
+                  <CheckCircle2 size={16} />
+                  Enregistrer le paiement
                 </button>
               </div>
-            </div>
-          ))}
-        </div>
+            </form>
+          </Modal>
+        )}
 
         {/* Modal for Unpaid Details */}
         <Modal
