@@ -377,6 +377,31 @@ const AdminReceipts: React.FC = () => {
     }
   };
 
+  const handleDeleteAllReceipts = async () => {
+    const confirmFirst = window.confirm("ATTENTION ! Voulez-vous vraiment supprimer TOUTES les quittances de l'application ? Cette action est définitive et irréversible !");
+    if (!confirmFirst) return;
+
+    const confirmSecond = window.prompt("Pour confirmer la suppression de TOUTES les quittances, veuillez saisir le mot 'SUPPRIMER' en majuscules :");
+    if (confirmSecond !== 'SUPPRIMER') {
+      alert("Suppression annulée. Le mot de confirmation est incorrect.");
+      return;
+    }
+
+    try {
+      if (receipts.length === 0) {
+        alert("Aucune quittance à supprimer.");
+        return;
+      }
+
+      await Promise.all(receipts.map(receipt => deleteDoc(doc(db, 'receipts', receipt.id))));
+      alert("Toutes les quittances ont été supprimées avec succès !");
+      fetchReceipts();
+    } catch (error) {
+      console.error('Error deleting all receipts:', error);
+      alert('Erreur lors de la suppression collective des quittances.');
+    }
+  };
+
   const handlePayReceipt = async (receipt: any) => {
     if (!window.confirm(`Confirmer le paiement en espèces de ${formatAmount(receipt.amount)} FCFA pour ${receipt.clientName} (${receipt.periodLabel || 'ce mois'}) ?`)) return;
 
@@ -475,10 +500,17 @@ const AdminReceipts: React.FC = () => {
           <div className="flex flex-wrap gap-4">
             <button
               onClick={handleRemoveDuplicates}
-              className="bg-red-100 text-red-600 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-red-200 transition-all"
+              className="bg-red-50 text-red-600 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-red-100 transition-all border border-red-200"
             >
               <Trash2 size={20} />
               Supprimer Doublons
+            </button>
+            <button
+              onClick={handleDeleteAllReceipts}
+              className="bg-red-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-red-700 transition-all shadow-md"
+            >
+              <Trash2 size={20} />
+              Tout supprimer
             </button>
             <button
               onClick={() => {
