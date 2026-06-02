@@ -556,7 +556,11 @@ const SuperAdminDashboard: React.FC = () => {
                         <td className="px-8 py-6">
                           {r.requestedBy ? (
                             <span className={`px-4 py-2 rounded-xl text-xs font-bold ${
-                              r.requestedBy === 'OMAR' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                              r.requestedBy === 'OMAR' 
+                                ? 'bg-amber-100 text-amber-700' 
+                                : r.requestedBy === 'AMY' 
+                                ? 'bg-pink-100 text-pink-700' 
+                                : 'bg-blue-100 text-blue-700'
                             }`}>
                               {r.requestedBy}
                             </span>

@@ -585,6 +585,7 @@ const AdminReceipts: React.FC = () => {
                   <option value="">-- Sélectionner le demandeur --</option>
                   <option value="OMAR">OMAR</option>
                   <option value="MBODJ">MBODJ</option>
+                  <option value="AMY">AMY</option>
                 </select>
               </div>
 
@@ -866,7 +867,7 @@ const AdminReceipts: React.FC = () => {
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700 ml-1">Demandé par (OMAR / MBODJ)</label>
+              <label className="text-sm font-bold text-gray-700 ml-1">Demandé par (OMAR / MBODJ / AMY)</label>
               <select
                 className="w-full px-5 py-4 bg-amber-50 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 outline-none transition-all appearance-none font-bold text-amber-900"
                 value={newReceipt.requestedBy}
@@ -875,6 +876,7 @@ const AdminReceipts: React.FC = () => {
                 <option value="">-- Sélectionner le demandeur --</option>
                 <option value="OMAR">OMAR</option>
                 <option value="MBODJ">MBODJ</option>
+                <option value="AMY">AMY</option>
               </select>
             </div>
             <div className="flex gap-4 md:col-span-2 pt-4">
