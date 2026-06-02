@@ -144,10 +144,19 @@ const SuperAdminDashboard: React.FC = () => {
   };
 
   const updateReportTotals = (report: any) => {
+    // Ensure 'nonPaye' never automatically gets computed by a formula (from existing stored reports)
+    const sanitizedColumns = (report.columns || []).map((col: any) => {
+      if (col.id === 'nonPaye' && col.formula) {
+        const { formula, ...rest } = col;
+        return rest;
+      }
+      return col;
+    });
+
     const updatedItems = (report.items || []).map((item: any) => {
       let newItem = { ...item };
-      (report.columns || []).forEach((col: any) => {
-        if (col.formula && col.type === 'number') {
+      sanitizedColumns.forEach((col: any) => {
+        if (col.formula && col.type === 'number' && col.id !== 'nonPaye') {
           if (!newItem[`_manual_${col.id}`]) {
             newItem[col.id] = evaluateFormula(col.formula, newItem);
           }
@@ -156,7 +165,7 @@ const SuperAdminDashboard: React.FC = () => {
       return newItem;
     });
 
-    const payeCol = (report.columns || []).find((c: any) => c.id === 'paye' || c.label?.toLowerCase() === 'payé' || c.label?.toLowerCase() === 'paye');
+    const payeCol = sanitizedColumns.find((c: any) => c.id === 'paye' || c.label?.toLowerCase() === 'payé' || c.label?.toLowerCase() === 'paye');
     const payeId = payeCol ? payeCol.id : 'paye';
     
     const totalPaye = updatedItems.reduce((sum: number, item: any) => sum + getSafeNum(item[payeId]), 0);
@@ -168,6 +177,7 @@ const SuperAdminDashboard: React.FC = () => {
     
     return {
       ...report,
+      columns: sanitizedColumns,
       items: updatedItems,
       totalPaye,
       totalCommission: report.isManualCommission ? report.totalCommission : commission,

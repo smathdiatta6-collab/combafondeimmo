@@ -80,7 +80,7 @@ const AdminMonthlyReports: React.FC = () => {
     { id: 'nom', label: 'Nom', type: 'text' },
     { id: 'loyer', label: 'Loyer', type: 'number' },
     { id: 'paye', label: 'Payé', type: 'number' },
-    { id: 'nonPaye', label: 'Non Payé', type: 'number', formula: 'loyer - paye' },
+    { id: 'nonPaye', label: 'Non Payé', type: 'number' },
   ];
 
   const [newReport, setNewReport] = useState({
@@ -211,11 +211,20 @@ const AdminMonthlyReports: React.FC = () => {
   };
 
   const updateReportTotals = (report: typeof newReport) => {
+    // Ensure 'nonPaye' never automatically gets computed by a formula (from existing stored reports)
+    const sanitizedColumns = (report.columns || []).map(col => {
+      if (col.id === 'nonPaye' && col.formula) {
+        const { formula, ...rest } = col;
+        return rest;
+      }
+      return col;
+    });
+
     // First, update any formula columns in items (unless manually overridden)
     const updatedItems = report.items.map(item => {
       let newItem = { ...item };
-      report.columns.forEach(col => {
-        if (col.formula && col.type === 'number') {
+      sanitizedColumns.forEach(col => {
+        if (col.formula && col.type === 'number' && col.id !== 'nonPaye') {
           // Pass current item values to evaluateFormula only if not manual override
           if (!newItem[`_manual_${col.id}`]) {
             newItem[col.id] = evaluateFormula(col.formula, newItem);
@@ -226,7 +235,7 @@ const AdminMonthlyReports: React.FC = () => {
     });
 
     // Dynamically find the column to use for paye (defaulting to 'paye' ID)
-    const payeCol = report.columns.find(c => c.id === 'paye' || c.label.toLowerCase() === 'payé' || c.label.toLowerCase() === 'paye');
+    const payeCol = sanitizedColumns.find(c => c.id === 'paye' || c.label.toLowerCase() === 'payé' || c.label.toLowerCase() === 'paye');
     const payeId = payeCol ? payeCol.id : 'paye';
     
     const totalPaye = updatedItems.reduce((sum, item) => sum + getSafeNum(item[payeId]), 0);
@@ -238,6 +247,7 @@ const AdminMonthlyReports: React.FC = () => {
     
     return {
       ...report,
+      columns: sanitizedColumns,
       items: updatedItems,
       totalPaye,
       totalCommission: report.isManualCommission ? report.totalCommission : commission,
