@@ -150,8 +150,9 @@ const AdminMonthlyReports: React.FC = () => {
   }, [newReport, isAdding, editingId]);
 
   useEffect(() => {
-    const words = numberToWordsFrench(newReport.totalRemettre);
-    const formatted = newReport.totalRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    const total = newReport.totalRemettre || 0;
+    const words = numberToWordsFrench(total);
+    const formatted = total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     const currency = newReport.reportCurrency?.trim() || 'FCFA';
     const newArrete = `${words} ${currency} (${formatted})`;
     
@@ -174,8 +175,9 @@ const AdminMonthlyReports: React.FC = () => {
       const updated = updateReportTotals(reportWithFlagsReset);
       
       // Also update arreteSomme immediately to be consistent
-      const words = numberToWordsFrench(updated.totalRemettre);
-      const formatted = updated.totalRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      const total = updated.totalRemettre || 0;
+      const words = numberToWordsFrench(total);
+      const formatted = total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
       const currency = updated.reportCurrency?.trim() || 'FCFA';
       
       return {
@@ -287,7 +289,8 @@ const AdminMonthlyReports: React.FC = () => {
     return isNaN(n) ? 0 : n;
   };
 
-  const formatAmount = (val: number) => {
+  const formatAmount = (val: any) => {
+    if (val === undefined || val === null) return "0";
     return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   };
 
@@ -778,8 +781,9 @@ const AdminMonthlyReports: React.FC = () => {
         items: updatedItems
       });
 
-      const words = numberToWordsFrench(calculatedReport.totalRemettre);
-      const formatted = calculatedReport.totalRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      const total = calculatedReport.totalRemettre || 0;
+      const words = numberToWordsFrench(total);
+      const formatted = total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
       const currency = (calculatedReport.reportCurrency || 'FCFA').trim();
       const arreteVal = `${words} ${currency} (${formatted})`;
 

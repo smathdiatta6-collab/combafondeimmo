@@ -165,7 +165,8 @@ const AdminReceipts: React.FC = () => {
     }
   };
 
-  const formatAmount = (val: number) => {
+  const formatAmount = (val: any) => {
+    if (val === undefined || val === null) return "0";
     return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   };
 
@@ -950,9 +951,9 @@ const AdminReceipts: React.FC = () => {
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-1">{receipt.clientName}</h3>
                 {receipt.bailleurName && (
-                  <p className="text-blue-600 font-bold text-xs mb-3 flex items-center gap-1 uppercase">
+                  <div className="text-blue-600 font-bold text-xs mb-3 flex items-center gap-1 uppercase">
                     <Logo className="h-3 w-auto opacity-70" /> {receipt.bailleurName}
-                  </p>
+                  </div>
                 )}
                 <div className="flex justify-between items-center mb-4">
                   <p className="text-green-600 font-bold text-lg">{formatAmount(receipt.amount)} FCFA</p>

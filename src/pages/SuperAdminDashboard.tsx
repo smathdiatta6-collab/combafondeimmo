@@ -104,7 +104,8 @@ const SuperAdminDashboard: React.FC = () => {
     setFilteredReceipts(filtered);
   };
 
-  const formatAmount = (val: number) => {
+  const formatAmount = (val: any) => {
+    if (val === undefined || val === null) return "0";
     return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   };
 
@@ -210,8 +211,9 @@ const SuperAdminDashboard: React.FC = () => {
         items: updatedItems
       });
 
-      const words = numberToWordsFrench(calculatedReport.totalRemettre);
-      const formatted = calculatedReport.totalRemettre.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      const total = calculatedReport.totalRemettre || 0;
+      const words = numberToWordsFrench(total);
+      const formatted = total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
       const currency = (calculatedReport.reportCurrency || 'FCFA').trim();
       const arreteVal = `${words} ${currency} (${formatted})`;
 
