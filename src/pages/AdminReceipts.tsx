@@ -41,6 +41,7 @@ const AdminReceipts: React.FC = () => {
     reference: '',
     prestations: 0,
     timbre: 0,
+    caution: 0,
     periodLabel: 'un mois',
     propertyAddress: '',
     status: 'En attente',
@@ -75,6 +76,17 @@ const AdminReceipts: React.FC = () => {
       setContractsLoaded(true);
     }
   };
+
+  useEffect(() => {
+    const total = (newReceipt.amount || 0) + (newReceipt.prestations || 0) + (newReceipt.timbre || 0) + (newReceipt.caution || 0);
+    const words = numberToWordsFrench(total);
+    if (newReceipt.amountInWords !== words) {
+      setNewReceipt(prev => ({
+        ...prev,
+        amountInWords: words
+      }));
+    }
+  }, [newReceipt.amount, newReceipt.prestations, newReceipt.timbre, newReceipt.caution, newReceipt.amountInWords]);
 
   useEffect(() => {
     // Check if we came from a monthly report
@@ -243,6 +255,7 @@ const AdminReceipts: React.FC = () => {
         reference: '',
         prestations: 0,
         timbre: 0,
+        caution: 0,
         periodLabel: 'un mois',
         propertyAddress: '',
         status: 'En attente',
@@ -270,6 +283,7 @@ const AdminReceipts: React.FC = () => {
       reference: receipt.reference || '',
       prestations: receipt.prestations || 0,
       timbre: receipt.timbre || 0,
+      caution: receipt.caution || 0,
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
       status: receipt.status || 'En attente',
@@ -293,6 +307,7 @@ const AdminReceipts: React.FC = () => {
       reference: '',
       prestations: receipt.prestations || 0,
       timbre: receipt.timbre || 0,
+      caution: receipt.caution || 0,
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
       status: 'En attente',
@@ -527,7 +542,13 @@ const AdminReceipts: React.FC = () => {
                     contractId: '', 
                     paymentMethodId: 'Especes', 
                     reference: '',
-                    propertyAddress: ''
+                    propertyAddress: '',
+                    prestations: 0,
+                    timbre: 0,
+                    caution: 0,
+                    periodLabel: 'un mois',
+                    status: 'En attente',
+                    requestedBy: ''
                   });
                 }
                 setIsAdding(!isAdding);
@@ -719,6 +740,7 @@ const AdminReceipts: React.FC = () => {
               reference: '',
               prestations: 0,
               timbre: 0,
+              caution: 0,
               periodLabel: 'un mois',
               propertyAddress: '',
               status: 'En attente',
@@ -847,6 +869,15 @@ const AdminReceipts: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Caution (FCFA)</label>
+              <input
+                type="number"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newReceipt.caution || 0}
+                onChange={(e) => setNewReceipt({ ...newReceipt, caution: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700 ml-1">Date du Paiement</label>
               <input
                 type="date"
@@ -899,6 +930,7 @@ const AdminReceipts: React.FC = () => {
                   reference: '',
                   prestations: 0,
                   timbre: 0,
+                  caution: 0,
                   periodLabel: 'un mois',
                   propertyAddress: '',
                   status: 'En attente',
@@ -956,14 +988,44 @@ const AdminReceipts: React.FC = () => {
                   </div>
                 )}
                 <div className="flex justify-between items-center mb-4">
-                  <p className="text-green-600 font-bold text-lg">{formatAmount(receipt.amount)} FCFA</p>
+                  <p className="text-green-600 font-bold text-lg">{formatAmount((receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0))} FCFA</p>
                   <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
                     receipt.status === 'Payé' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
                   }`}>
                     {receipt.status || 'Payé'}
                   </span>
                 </div>
-                <div className="space-y-2 text-sm text-gray-500">
+                
+                <div className="space-y-1 text-sm text-gray-500 border-t border-gray-100 pt-3 mt-3">
+                  <div className="flex justify-between">
+                    <span>Loyer :</span>
+                    <span className="font-semibold text-gray-700">{formatAmount(receipt.amount || 0)} FCFA</span>
+                  </div>
+                  {(receipt.prestations || 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span>Prestations :</span>
+                      <span className="font-semibold text-gray-700">{formatAmount(receipt.prestations)} FCFA</span>
+                    </div>
+                  )}
+                  {(receipt.timbre || 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span>Timbre :</span>
+                      <span className="font-semibold text-gray-700">{formatAmount(receipt.timbre)} FCFA</span>
+                    </div>
+                  )}
+                  {(receipt.caution || 0) > 0 && (
+                    <div className="flex justify-between text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                      <span className="font-bold">Caution :</span>
+                      <span className="font-bold">{formatAmount(receipt.caution)} FCFA</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-1 font-bold text-gray-800">
+                    <span>Total :</span>
+                    <span>{formatAmount((receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0))} FCFA</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-sm text-gray-500 mt-4">
                   <p className="font-bold text-blue-600">{receipt.periodLabel}</p>
                   <p>Date: {receipt.date}</p>
                 </div>

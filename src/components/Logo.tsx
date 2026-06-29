@@ -10,12 +10,12 @@ const Logo: React.FC<LogoProps> = ({ className = "h-12", variant = 'dark' }) => 
   const accentColor = '#F97316';
 
   return (
-    <div className={`flex items-center shrink-0 ${className}`}>
+    <div className={`flex items-center shrink-0 ${className}`} style={{ aspectRatio: '4/1' }}>
       <svg
         viewBox="0 0 1000 250"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="h-full w-auto aspect-[4/1]"
+        className="h-full w-full"
       >
         {/* Roof - Orange */}
         <path

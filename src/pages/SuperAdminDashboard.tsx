@@ -433,7 +433,7 @@ const SuperAdminDashboard: React.FC = () => {
 
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
           <div className="flex items-center gap-6">
-            <Logo className="h-16" />
+            <Logo className="h-16" variant="dark" />
             <div>
               <h1 className="text-4xl font-bold text-gray-900 font-sans">Contrôle Activité</h1>
               <p className="text-gray-600">Suivi des performances de l'équipe</p>

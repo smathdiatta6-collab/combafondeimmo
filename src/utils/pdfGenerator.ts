@@ -110,7 +110,7 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     doc.setTextColor(0);
 
     // Total Amount (Clearly separated)
-    const totalAmount = (receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0);
+    const totalAmount = (receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0);
     currentY += 15;
     doc.setFontSize(12);
     doc.setFont('times', 'bold');
@@ -121,7 +121,13 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     // Title
     doc.setFontSize(16);
     doc.setFont('times', 'bold');
-    doc.text('QUITTANCE DE LOYER', pageWidth / 2, currentY, { align: 'center' });
+    if ((receipt.caution || 0) > 0 && (receipt.amount || 0) === 0) {
+      doc.text('REÇU DE CAUTION', pageWidth / 2, currentY, { align: 'center' });
+    } else if ((receipt.caution || 0) > 0 && (receipt.amount || 0) > 0) {
+      doc.text('QUITTANCE DE LOYER ET CAUTION', pageWidth / 2, currentY, { align: 'center' });
+    } else {
+      doc.text('QUITTANCE DE LOYER', pageWidth / 2, currentY, { align: 'center' });
+    }
     
     currentY += 15;
     doc.setFontSize(12);
@@ -146,7 +152,14 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     const wordsLines = splitWords.length;
     currentY += (wordsLines * 6);
     doc.setFont('times', 'normal');
-    doc.text(`de loyer des locaux qu'il occupe`, mainX, currentY);
+    
+    let occupyText = `de loyer des locaux qu'il occupe`;
+    if ((receipt.caution || 0) > 0 && (receipt.amount || 0) === 0) {
+      occupyText = `à titre de caution pour les locaux qu'il va occuper`;
+    } else if ((receipt.caution || 0) > 0 && (receipt.amount || 0) > 0) {
+      occupyText = `de loyer et de caution des locaux qu'il occupe`;
+    }
+    doc.text(occupyText, mainX, currentY);
     
     currentY += lineSpacing;
     
