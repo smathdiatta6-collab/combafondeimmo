@@ -43,6 +43,7 @@ const AdminReceipts: React.FC = () => {
     timbre: 0,
     caution: 0,
     cautionLabel: '',
+    cautionMonths: 0,
     periodLabel: 'un mois',
     propertyAddress: '',
     status: 'En attente',
@@ -150,6 +151,7 @@ const AdminReceipts: React.FC = () => {
           timbre: 0,
           caution: 0,
           cautionLabel: '',
+          cautionMonths: 0,
           periodLabel: `un mois de ${reportToProcess.mois.split(' ')[0]}`,
           propertyAddress: `Cité BATA chez ${reportToProcess.chez}`,
           status: 'En attente',
@@ -260,6 +262,7 @@ const AdminReceipts: React.FC = () => {
         timbre: 0,
         caution: 0,
         cautionLabel: '',
+        cautionMonths: 0,
         periodLabel: 'un mois',
         propertyAddress: '',
         status: 'En attente',
@@ -289,6 +292,7 @@ const AdminReceipts: React.FC = () => {
       timbre: receipt.timbre || 0,
       caution: receipt.caution || 0,
       cautionLabel: receipt.cautionLabel || '',
+      cautionMonths: receipt.cautionMonths || (receipt.caution && receipt.amount ? Math.round(receipt.caution / receipt.amount) : 0),
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
       status: receipt.status || 'En attente',
@@ -314,6 +318,7 @@ const AdminReceipts: React.FC = () => {
       timbre: receipt.timbre || 0,
       caution: receipt.caution || 0,
       cautionLabel: receipt.cautionLabel || '',
+      cautionMonths: receipt.cautionMonths || (receipt.caution && receipt.amount ? Math.round(receipt.caution / receipt.amount) : 0),
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
       status: 'En attente',
@@ -553,6 +558,7 @@ const AdminReceipts: React.FC = () => {
                     timbre: 0,
                     caution: 0,
                     cautionLabel: '',
+                    cautionMonths: 0,
                     periodLabel: 'un mois',
                     status: 'En attente',
                     requestedBy: ''
@@ -749,6 +755,7 @@ const AdminReceipts: React.FC = () => {
               timbre: 0,
               caution: 0,
               cautionLabel: '',
+              cautionMonths: 0,
               periodLabel: 'un mois',
               propertyAddress: '',
               status: 'En attente',
@@ -786,10 +793,14 @@ const AdminReceipts: React.FC = () => {
                 value={newReceipt.amount}
                 onChange={(e) => {
                   const amt = parseInt(e.target.value) || 0;
-                  setNewReceipt({ 
-                    ...newReceipt, 
-                    amount: amt,
-                    amountInWords: numberToWordsFrench(amt)
+                  setNewReceipt(prev => {
+                    const cautionAmt = prev.cautionMonths > 0 ? amt * prev.cautionMonths : prev.caution;
+                    return { 
+                      ...prev, 
+                      amount: amt,
+                      caution: cautionAmt,
+                      amountInWords: numberToWordsFrench(amt)
+                    };
                   });
                 }}
               />
@@ -877,17 +888,41 @@ const AdminReceipts: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700 ml-1">Libellé de la caution (Ex: 2 mois de caution)</label>
+              <label className="text-sm font-bold text-gray-700 ml-1">Caution (Nombre de mois)</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                placeholder="Ex: 2"
+                value={newReceipt.cautionMonths || 0}
+                onChange={(e) => {
+                  const months = parseInt(e.target.value) || 0;
+                  setNewReceipt(prev => {
+                    const calculatedCaution = months * (prev.amount || 0);
+                    const calculatedLabel = months > 0 ? `${months} mois de caution` : '';
+                    return {
+                      ...prev,
+                      cautionMonths: months,
+                      caution: calculatedCaution,
+                      cautionLabel: calculatedLabel
+                    };
+                  });
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Libellé de la caution (Rempli automatiquement)</label>
               <input
                 type="text"
                 className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                placeholder="Ex: 2 mois de caution, 1 mois de caution..."
+                placeholder="Ex: 2 mois de caution"
                 value={newReceipt.cautionLabel || ''}
                 onChange={(e) => setNewReceipt({ ...newReceipt, cautionLabel: e.target.value })}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700 ml-1">Montant Caution (FCFA)</label>
+              <label className="text-sm font-bold text-gray-700 ml-1">Montant Caution (Calculé automatiquement, modifiable)</label>
               <input
                 type="number"
                 className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -950,6 +985,7 @@ const AdminReceipts: React.FC = () => {
                   timbre: 0,
                   caution: 0,
                   cautionLabel: '',
+                  cautionMonths: 0,
                   periodLabel: 'un mois',
                   propertyAddress: '',
                   status: 'En attente',
