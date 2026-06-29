@@ -42,6 +42,7 @@ const AdminReceipts: React.FC = () => {
     prestations: 0,
     timbre: 0,
     caution: 0,
+    cautionLabel: '',
     periodLabel: 'un mois',
     propertyAddress: '',
     status: 'En attente',
@@ -147,6 +148,8 @@ const AdminReceipts: React.FC = () => {
           reference: '',
           prestations: 0,
           timbre: 0,
+          caution: 0,
+          cautionLabel: '',
           periodLabel: `un mois de ${reportToProcess.mois.split(' ')[0]}`,
           propertyAddress: `Cité BATA chez ${reportToProcess.chez}`,
           status: 'En attente',
@@ -256,6 +259,7 @@ const AdminReceipts: React.FC = () => {
         prestations: 0,
         timbre: 0,
         caution: 0,
+        cautionLabel: '',
         periodLabel: 'un mois',
         propertyAddress: '',
         status: 'En attente',
@@ -284,6 +288,7 @@ const AdminReceipts: React.FC = () => {
       prestations: receipt.prestations || 0,
       timbre: receipt.timbre || 0,
       caution: receipt.caution || 0,
+      cautionLabel: receipt.cautionLabel || '',
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
       status: receipt.status || 'En attente',
@@ -308,6 +313,7 @@ const AdminReceipts: React.FC = () => {
       prestations: receipt.prestations || 0,
       timbre: receipt.timbre || 0,
       caution: receipt.caution || 0,
+      cautionLabel: receipt.cautionLabel || '',
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
       status: 'En attente',
@@ -546,6 +552,7 @@ const AdminReceipts: React.FC = () => {
                     prestations: 0,
                     timbre: 0,
                     caution: 0,
+                    cautionLabel: '',
                     periodLabel: 'un mois',
                     status: 'En attente',
                     requestedBy: ''
@@ -741,6 +748,7 @@ const AdminReceipts: React.FC = () => {
               prestations: 0,
               timbre: 0,
               caution: 0,
+              cautionLabel: '',
               periodLabel: 'un mois',
               propertyAddress: '',
               status: 'En attente',
@@ -869,7 +877,17 @@ const AdminReceipts: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700 ml-1">Caution (FCFA)</label>
+              <label className="text-sm font-bold text-gray-700 ml-1">Libellé de la caution (Ex: 2 mois de caution)</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                placeholder="Ex: 2 mois de caution, 1 mois de caution..."
+                value={newReceipt.cautionLabel || ''}
+                onChange={(e) => setNewReceipt({ ...newReceipt, cautionLabel: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Montant Caution (FCFA)</label>
               <input
                 type="number"
                 className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -931,6 +949,7 @@ const AdminReceipts: React.FC = () => {
                   prestations: 0,
                   timbre: 0,
                   caution: 0,
+                  cautionLabel: '',
                   periodLabel: 'un mois',
                   propertyAddress: '',
                   status: 'En attente',
@@ -1015,7 +1034,7 @@ const AdminReceipts: React.FC = () => {
                   )}
                   {(receipt.caution || 0) > 0 && (
                     <div className="flex justify-between text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                      <span className="font-bold">Caution :</span>
+                      <span className="font-bold">{receipt.cautionLabel || 'Caution'} :</span>
                       <span className="font-bold">{formatAmount(receipt.caution)} FCFA</span>
                     </div>
                   )}

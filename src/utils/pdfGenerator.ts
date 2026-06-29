@@ -154,10 +154,11 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     doc.setFont('times', 'normal');
     
     let occupyText = `de loyer des locaux qu'il occupe`;
+    const label = receipt.cautionLabel || 'caution';
     if ((receipt.caution || 0) > 0 && (receipt.amount || 0) === 0) {
-      occupyText = `à titre de caution pour les locaux qu'il va occuper`;
+      occupyText = `à titre de ${label} pour les locaux qu'il va occuper`;
     } else if ((receipt.caution || 0) > 0 && (receipt.amount || 0) > 0) {
-      occupyText = `de loyer et de caution des locaux qu'il occupe`;
+      occupyText = `de loyer et de ${label} des locaux qu'il occupe`;
     }
     doc.text(occupyText, mainX, currentY);
     
