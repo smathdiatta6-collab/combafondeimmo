@@ -47,7 +47,15 @@ const AdminReceipts: React.FC = () => {
     periodLabel: 'un mois',
     propertyAddress: '',
     status: 'En attente',
-    requestedBy: ''
+    requestedBy: '',
+    customTitle: '',
+    boldClientName: true,
+    boldAmountInWords: false,
+    boldOccupyText: false,
+    boldPeriodLabel: true,
+    boldPropertyAddress: true,
+    boldPeriodDates: false,
+    boldFaitA: false
   });
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -156,6 +164,14 @@ const AdminReceipts: React.FC = () => {
           propertyAddress: `Cité BATA chez ${reportToProcess.chez}`,
           status: 'En attente',
           requestedBy: bulkRequestedBy,
+          customTitle: '',
+          boldClientName: true,
+          boldAmountInWords: false,
+          boldOccupyText: false,
+          boldPeriodLabel: true,
+          boldPropertyAddress: true,
+          boldPeriodDates: false,
+          boldFaitA: false,
           createdByUID: user?.uid,
           createdByName: user?.displayName || user?.email,
           createdAt: new Date().toISOString()
@@ -266,7 +282,15 @@ const AdminReceipts: React.FC = () => {
         periodLabel: 'un mois',
         propertyAddress: '',
         status: 'En attente',
-        requestedBy: ''
+        requestedBy: '',
+        customTitle: '',
+        boldClientName: true,
+        boldAmountInWords: false,
+        boldOccupyText: false,
+        boldPeriodLabel: true,
+        boldPropertyAddress: true,
+        boldPeriodDates: false,
+        boldFaitA: false
       });
       setIsAdding(false);
       setEditingId(null);
@@ -296,7 +320,15 @@ const AdminReceipts: React.FC = () => {
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
       status: receipt.status || 'En attente',
-      requestedBy: receipt.requestedBy || ''
+      requestedBy: receipt.requestedBy || '',
+      customTitle: receipt.customTitle || '',
+      boldClientName: receipt.boldClientName !== undefined ? receipt.boldClientName : true,
+      boldAmountInWords: receipt.boldAmountInWords !== undefined ? receipt.boldAmountInWords : false,
+      boldOccupyText: receipt.boldOccupyText !== undefined ? receipt.boldOccupyText : false,
+      boldPeriodLabel: receipt.boldPeriodLabel !== undefined ? receipt.boldPeriodLabel : true,
+      boldPropertyAddress: receipt.boldPropertyAddress !== undefined ? receipt.boldPropertyAddress : true,
+      boldPeriodDates: receipt.boldPeriodDates !== undefined ? receipt.boldPeriodDates : false,
+      boldFaitA: receipt.boldFaitA !== undefined ? receipt.boldFaitA : false
     });
     setEditingId(receipt.id);
     setIsAdding(true);
@@ -322,7 +354,15 @@ const AdminReceipts: React.FC = () => {
       periodLabel: receipt.periodLabel || 'un mois',
       propertyAddress: receipt.propertyAddress || '',
       status: 'En attente',
-      requestedBy: receipt.requestedBy || ''
+      requestedBy: receipt.requestedBy || '',
+      customTitle: receipt.customTitle || '',
+      boldClientName: receipt.boldClientName !== undefined ? receipt.boldClientName : true,
+      boldAmountInWords: receipt.boldAmountInWords !== undefined ? receipt.boldAmountInWords : false,
+      boldOccupyText: receipt.boldOccupyText !== undefined ? receipt.boldOccupyText : false,
+      boldPeriodLabel: receipt.boldPeriodLabel !== undefined ? receipt.boldPeriodLabel : true,
+      boldPropertyAddress: receipt.boldPropertyAddress !== undefined ? receipt.boldPropertyAddress : true,
+      boldPeriodDates: receipt.boldPeriodDates !== undefined ? receipt.boldPeriodDates : false,
+      boldFaitA: receipt.boldFaitA !== undefined ? receipt.boldFaitA : false
     });
     setEditingId(null);
     setIsAdding(true);
@@ -561,7 +601,15 @@ const AdminReceipts: React.FC = () => {
                     cautionMonths: 0,
                     periodLabel: 'un mois',
                     status: 'En attente',
-                    requestedBy: ''
+                    requestedBy: '',
+                    customTitle: '',
+                    boldClientName: true,
+                    boldAmountInWords: false,
+                    boldOccupyText: false,
+                    boldPeriodLabel: true,
+                    boldPropertyAddress: true,
+                    boldPeriodDates: false,
+                    boldFaitA: false
                   });
                 }
                 setIsAdding(!isAdding);
@@ -759,7 +807,15 @@ const AdminReceipts: React.FC = () => {
               periodLabel: 'un mois',
               propertyAddress: '',
               status: 'En attente',
-              requestedBy: ''
+              requestedBy: '',
+              customTitle: '',
+              boldClientName: true,
+              boldAmountInWords: false,
+              boldOccupyText: false,
+              boldPeriodLabel: true,
+              boldPropertyAddress: true,
+              boldPeriodDates: false,
+              boldFaitA: false
             });
           }}
           title={editingId ? 'Modifier la Quittance' : 'Nouvelle Quittance'}
@@ -964,6 +1020,101 @@ const AdminReceipts: React.FC = () => {
                 <option value="AMY">AMY</option>
               </select>
             </div>
+
+            <div className="md:col-span-2 border-t border-gray-100 pt-6 mt-4 space-y-4">
+              <h3 className="text-lg font-bold text-blue-900">Personnalisation du titre & du style</h3>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 ml-1">
+                  Titre personnalisé du document (Laisser vide pour le titre automatique)
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-900 placeholder-gray-400 font-medium"
+                  placeholder="Ex: QUITTANCE DE LOYER, REÇU DE CAUTION, FACTURE, etc."
+                  value={newReceipt.customTitle || ''}
+                  onChange={(e) => setNewReceipt({ ...newReceipt, customTitle: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-gray-700 ml-1 block">
+                  Phrases ou éléments à mettre en gras (Bold) sur le PDF
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 bg-gray-50 p-5 rounded-2xl">
+                  <label className="flex items-center space-x-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={newReceipt.boldClientName !== false}
+                      onChange={(e) => setNewReceipt({ ...newReceipt, boldClientName: e.target.checked })}
+                    />
+                    <span className="text-sm font-semibold text-gray-700">Nom du locataire (M. ...)</span>
+                  </label>
+
+                  <label className="flex items-center space-x-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={!!newReceipt.boldAmountInWords}
+                      onChange={(e) => setNewReceipt({ ...newReceipt, boldAmountInWords: e.target.checked })}
+                    />
+                    <span className="text-sm font-semibold text-gray-700">Montant en toutes lettres</span>
+                  </label>
+
+                  <label className="flex items-center space-x-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={!!newReceipt.boldOccupyText}
+                      onChange={(e) => setNewReceipt({ ...newReceipt, boldOccupyText: e.target.checked })}
+                    />
+                    <span className="text-sm font-semibold text-gray-700">Libellé d'occupation</span>
+                  </label>
+
+                  <label className="flex items-center space-x-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={newReceipt.boldPeriodLabel !== false}
+                      onChange={(e) => setNewReceipt({ ...newReceipt, boldPeriodLabel: e.target.checked })}
+                    />
+                    <span className="text-sm font-semibold text-gray-700">Période (un mois, etc.)</span>
+                  </label>
+
+                  <label className="flex items-center space-x-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={newReceipt.boldPropertyAddress !== false}
+                      onChange={(e) => setNewReceipt({ ...newReceipt, boldPropertyAddress: e.target.checked })}
+                    />
+                    <span className="text-sm font-semibold text-gray-700">Adresse de la maison</span>
+                  </label>
+
+                  <label className="flex items-center space-x-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={!!newReceipt.boldPeriodDates}
+                      onChange={(e) => setNewReceipt({ ...newReceipt, boldPeriodDates: e.target.checked })}
+                    />
+                    <span className="text-sm font-semibold text-gray-700">Dates de la période</span>
+                  </label>
+
+                  <label className="flex items-center space-x-3 cursor-pointer select-none sm:col-span-2 md:col-span-3">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={!!newReceipt.boldFaitA}
+                      onChange={(e) => setNewReceipt({ ...newReceipt, boldFaitA: e.target.checked })}
+                    />
+                    <span className="text-sm font-semibold text-gray-700">Lieu et Date de signature (Fait à ...)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <div className="flex gap-4 md:col-span-2 pt-4">
               <button type="submit" className="flex-1 bg-blue-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-800 transition-all shadow-lg">
                 {editingId ? 'Mettre à jour' : 'Générer'}
@@ -989,7 +1140,15 @@ const AdminReceipts: React.FC = () => {
                   periodLabel: 'un mois',
                   propertyAddress: '',
                   status: 'En attente',
-                  requestedBy: ''
+                  requestedBy: '',
+                  customTitle: '',
+                  boldClientName: true,
+                  boldAmountInWords: false,
+                  boldOccupyText: false,
+                  boldPeriodLabel: true,
+                  boldPropertyAddress: true,
+                  boldPeriodDates: false,
+                  boldFaitA: false
                 });
               }} className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all">
                 Annuler

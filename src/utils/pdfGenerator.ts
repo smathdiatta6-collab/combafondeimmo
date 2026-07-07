@@ -121,7 +121,9 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     // Title
     doc.setFontSize(16);
     doc.setFont('times', 'bold');
-    if ((receipt.caution || 0) > 0 && (receipt.amount || 0) === 0) {
+    if (receipt.customTitle) {
+      doc.text(receipt.customTitle, pageWidth / 2, currentY, { align: 'center' });
+    } else if ((receipt.caution || 0) > 0 && (receipt.amount || 0) === 0) {
       doc.text('REÇU DE CAUTION', pageWidth / 2, currentY, { align: 'center' });
     } else if ((receipt.caution || 0) > 0 && (receipt.amount || 0) > 0) {
       doc.text('QUITTANCE DE LOYER ET CAUTION', pageWidth / 2, currentY, { align: 'center' });
@@ -134,9 +136,18 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     doc.setFont('times', 'normal');
     const lineSpacing = 12;
 
+    // Bold fields options
+    const isClientNameBold = receipt.boldClientName !== false;
+    const isAmountWordsBold = !!receipt.boldAmountInWords;
+    const isOccupyBold = !!receipt.boldOccupyText;
+    const isPeriodLabelBold = receipt.boldPeriodLabel !== false;
+    const isAddressBold = receipt.boldPropertyAddress !== false;
+    const isPeriodDatesBold = !!receipt.boldPeriodDates;
+    const isFaitABold = !!receipt.boldFaitA;
+
     // Reçu de M.
     doc.text(`Reçu de M.`, mainX, currentY);
-    doc.setFont('times', 'bold');
+    doc.setFont('times', isClientNameBold ? 'bold' : 'normal');
     doc.text(receipt.clientName || '................................................', mainX + 25, currentY);
     
     currentY += lineSpacing;
@@ -144,7 +155,7 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     // La somme de
     doc.setFont('times', 'normal');
     doc.text(`la somme de`, mainX, currentY);
-    doc.setFont('times', 'italic');
+    doc.setFont('times', isAmountWordsBold ? 'bold' : 'italic');
     const amountWords = receipt.amountInWords || numberToWordsFrench(totalAmount);
     const splitWords = doc.splitTextToSize(amountWords, mainContentWidth - 30);
     doc.text(splitWords, mainX + 30, currentY);
@@ -160,22 +171,25 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     } else if ((receipt.caution || 0) > 0 && (receipt.amount || 0) > 0) {
       occupyText = `de loyer et de ${label} des locaux qu'il occupe`;
     }
+    doc.setFont('times', isOccupyBold ? 'bold' : 'normal');
     doc.text(occupyText, mainX, currentY);
     
     currentY += lineSpacing;
     
     // Période
+    doc.setFont('times', 'normal');
     doc.text(`pour la période de :`, mainX, currentY);
-    doc.setFont('times', 'bold');
+    doc.setFont('times', isPeriodLabelBold ? 'bold' : 'normal');
     doc.text(receipt.periodLabel || 'un mois', mainX + 35, currentY);
     
     currentY += lineSpacing;
     
     // Locaux
     const address = receipt.propertyAddress || contract?.propertyAddress || '................................................';
+    doc.setFont('times', 'normal');
     doc.text(`dans la maison située à :`, mainX, currentY);
     currentY += 7;
-    doc.setFont('times', 'bold');
+    doc.setFont('times', isAddressBold ? 'bold' : 'normal');
     doc.text(address, mainX, currentY);
     
     currentY += lineSpacing;
@@ -183,7 +197,7 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     // Period
     const pStart = receipt.periodStart ? new Date(receipt.periodStart).toLocaleDateString('fr-FR') : '.......';
     const pEnd = receipt.periodEnd ? new Date(receipt.periodEnd).toLocaleDateString('fr-FR') : '.......';
-    doc.setFont('times', 'normal');
+    doc.setFont('times', isPeriodDatesBold ? 'bold' : 'normal');
     doc.text(`le dit commençant le ${pStart}`, mainX, currentY);
     currentY += 7;
     doc.text(`et finissant le ${pEnd}`, mainX, currentY);
@@ -195,12 +209,11 @@ export const generateReceiptPDF = (receipt: any, contract?: any, paymentMethod?:
     doc.text('DONT QUITTANCE', pageWidth / 2, currentY, { align: 'center' });
     
     const formattedDate = receipt.date ? new Date(receipt.date).toLocaleDateString('fr-FR') : '...... / ...... / 20......';
-    doc.setFont('times', 'normal');
     currentY += 12;
-
+ 
     // Reset font for the date line first
     doc.setFontSize(12);
-    doc.setFont('times', 'normal');
+    doc.setFont('times', isFaitABold ? 'bold' : 'normal');
     doc.text(`Fait à Rufisque, le ${formattedDate}`, pageWidth - margin - 10, currentY, { align: 'right' });
 
     currentY += 8; // Add space between date and NOTA
