@@ -29,6 +29,86 @@ const AdminReceipts: React.FC = () => {
 
   const prevDates = getPreviousMonthDates();
 
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  const parseMonthsFromLabel = (label: string) => {
+    const monthsList = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    const found: string[] = [];
+    monthsList.forEach(m => {
+      if (label.toLowerCase().includes(m.toLowerCase())) {
+        found.push(m);
+      }
+    });
+    return found;
+  };
+
+  const parseYearFromLabel = (label: string) => {
+    const match = label.match(/\b(20\d{2})\b/);
+    return match ? parseInt(match[1]) : new Date().getFullYear();
+  };
+
+  const handleMonthCheckboxChange = (month: string, checked: boolean) => {
+    let updatedMonths = [...selectedMonths];
+    if (checked) {
+      if (!updatedMonths.includes(month)) {
+        updatedMonths.push(month);
+      }
+    } else {
+      updatedMonths = updatedMonths.filter(m => m !== month);
+    }
+    
+    const monthsList = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    updatedMonths.sort((a, b) => monthsList.indexOf(a) - monthsList.indexOf(b));
+    
+    setSelectedMonths(updatedMonths);
+    updateReceiptPeriodFromMonths(updatedMonths, selectedYear);
+  };
+
+  const handleYearChange = (year: number) => {
+    setSelectedYear(year);
+    updateReceiptPeriodFromMonths(selectedMonths, year);
+  };
+
+  const updateReceiptPeriodFromMonths = (monthsToUse: string[], year: number) => {
+    if (monthsToUse.length === 0) {
+      setNewReceipt(prev => ({
+        ...prev,
+        periodLabel: 'un mois',
+      }));
+      return;
+    }
+
+    const monthsMap: { [key: string]: number } = {
+      'Janvier': 0, 'Février': 1, 'Mars': 2, 'Avril': 3, 'Mai': 4, 'Juin': 5,
+      'Juillet': 6, 'Août': 7, 'Septembre': 8, 'Octobre': 9, 'Novembre': 10, 'Décembre': 11
+    };
+
+    const activeIndices = monthsToUse.map(m => monthsMap[m]).sort((a, b) => a - b);
+    const minIndex = activeIndices[0];
+    const maxIndex = activeIndices[activeIndices.length - 1];
+
+    const startDate = new Date(year, minIndex, 1);
+    const endDate = new Date(year, maxIndex + 1, 0);
+
+    const start = startDate.toISOString().split('T')[0];
+    const end = endDate.toISOString().split('T')[0];
+
+    let label = '';
+    if (monthsToUse.length === 1) {
+      label = `un mois de ${monthsToUse[0]} ${year}`;
+    } else {
+      label = `mois de ${monthsToUse.join(', ')} ${year}`;
+    }
+
+    setNewReceipt(prev => ({
+      ...prev,
+      periodLabel: label,
+      periodStart: start,
+      periodEnd: end
+    }));
+  };
+
   const [newReceipt, setNewReceipt] = useState({ 
     clientName: '', 
     bailleurName: '',
@@ -264,6 +344,8 @@ const AdminReceipts: React.FC = () => {
 
         alert('Quittance enregistrée avec succès !');
       }
+      setSelectedMonths([]);
+      setSelectedYear(new Date().getFullYear());
       setNewReceipt({ 
         clientName: '', 
         bailleurName: '',
@@ -301,6 +383,9 @@ const AdminReceipts: React.FC = () => {
   };
 
   const handleEditClick = (receipt: any) => {
+    const label = receipt.periodLabel || '';
+    setSelectedMonths(parseMonthsFromLabel(label));
+    setSelectedYear(parseYearFromLabel(label));
     setNewReceipt({
       clientName: receipt.clientName || '',
       bailleurName: receipt.bailleurName || '',
@@ -335,6 +420,9 @@ const AdminReceipts: React.FC = () => {
   };
 
   const handleDuplicate = (receipt: any) => {
+    const label = receipt.periodLabel || '';
+    setSelectedMonths(parseMonthsFromLabel(label));
+    setSelectedYear(parseYearFromLabel(label));
     setNewReceipt({
       clientName: `${receipt.clientName} (Copie)`,
       bailleurName: receipt.bailleurName || '',
@@ -581,6 +669,8 @@ const AdminReceipts: React.FC = () => {
             </button>
             <button
               onClick={() => {
+                setSelectedMonths([]);
+                setSelectedYear(new Date().getFullYear());
                 if (isAdding && editingId) {
                   setEditingId(null);
                   setNewReceipt({ 
@@ -788,6 +878,8 @@ const AdminReceipts: React.FC = () => {
           onClose={() => {
             setIsAdding(false);
             setEditingId(null);
+            setSelectedMonths([]);
+            setSelectedYear(new Date().getFullYear());
             setNewReceipt({ 
               clientName: '', 
               bailleurName: '',
@@ -900,30 +992,56 @@ const AdminReceipts: React.FC = () => {
                 onChange={(e) => setNewReceipt({ ...newReceipt, propertyAddress: e.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700 ml-1">Période (Mois)</label>
-              <select
-                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+            <div className="md:col-span-2 border-t border-gray-100 pt-6 mt-4 space-y-4">
+              <span className="text-lg font-bold text-blue-900 block">Choisir les mois payés (Sélection multiple)</span>
+              
+              <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl w-fit">
+                <span className="text-sm text-gray-600 font-bold">Année de facturation :</span>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => handleYearChange(parseInt(e.target.value))}
+                  className="px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-blue-950 focus:ring-2 focus:ring-blue-500 text-sm outline-none cursor-pointer"
+                >
+                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5 bg-gray-50 p-5 rounded-[2rem]">
+                {['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'].map((m) => (
+                  <label 
+                    key={m} 
+                    className={`flex items-center justify-center py-3.5 px-2 rounded-2xl border text-xs font-extrabold cursor-pointer transition-all select-none text-center ${
+                      selectedMonths.includes(m)
+                        ? 'bg-blue-900 text-white border-blue-900 shadow-lg shadow-blue-900/20 scale-[1.02]'
+                        : 'bg-white text-gray-700 border-gray-100 hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="hidden"
+                      checked={selectedMonths.includes(m)}
+                      onChange={(e) => handleMonthCheckboxChange(m, e.target.checked)}
+                    />
+                    <span>{m}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-bold text-gray-700 ml-1">Période / Libellé de paiement du document (Modifiable librement)</label>
+              <input
+                type="text"
+                className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-semibold text-gray-900 placeholder-gray-400"
+                placeholder="Ex: un mois de Janvier, mois de Janvier et Février, etc."
                 value={newReceipt.periodLabel}
-                onChange={(e) => handlePeriodLabelChange(e.target.value)}
-              >
-                <option value="un mois">un mois</option>
-                <option value="un mois de Janvier">un mois de Janvier</option>
-                <option value="un mois de Février">un mois de Février</option>
-                <option value="un mois de Mars">un mois de Mars</option>
-                <option value="un mois de Avril">un mois de Avril</option>
-                <option value="un mois de Mai">un mois de Mai</option>
-                <option value="un mois de Juin">un mois de Juin</option>
-                <option value="un mois de Juillet">un mois de Juillet</option>
-                <option value="un mois de Août">un mois de Août</option>
-                <option value="un mois de Septembre">un mois de Septembre</option>
-                <option value="un mois de Octobre">un mois de Octobre</option>
-                <option value="un mois de Novembre">un mois de Novembre</option>
-                <option value="un mois de Décembre">un mois de Décembre</option>
-                <option value="un trimestre">un trimestre</option>
-                <option value="un semestre">un semestre</option>
-                <option value="une année">une année</option>
-              </select>
+                onChange={(e) => setNewReceipt({ ...newReceipt, periodLabel: e.target.value })}
+              />
+              <p className="text-xs text-gray-400 font-medium ml-1">
+                Ajustez le texte ci-dessus si vous souhaitez ajouter des détails spécifiques à la période payée.
+              </p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700 ml-1">Prestations (FCFA)</label>
@@ -1122,6 +1240,8 @@ const AdminReceipts: React.FC = () => {
               <button type="button" onClick={() => {
                 setIsAdding(false);
                 setEditingId(null);
+                setSelectedMonths([]);
+                setSelectedYear(new Date().getFullYear());
                 setNewReceipt({ 
                   clientName: '', 
                   amount: 0, 
