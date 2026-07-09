@@ -10,13 +10,13 @@ const Logo: React.FC<LogoProps> = ({ className = "h-12", variant = 'dark' }) => 
   const accentColor = '#F97316';
 
   return (
-    <div className={`flex items-center shrink-0 w-auto ${className}`} style={{ aspectRatio: '4/1' }}>
-      <svg
-        viewBox="0 0 1000 250"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-full w-full"
-      >
+    <svg
+      viewBox="0 0 1000 250"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={`shrink-0 ${className}`}
+      style={{ aspectRatio: '4/1' }}
+    >
         {/* Roof - Orange */}
         <path
           d="M20 100L120 20L220 100"
@@ -75,7 +75,6 @@ const Logo: React.FC<LogoProps> = ({ className = "h-12", variant = 'dark' }) => 
           IMMO
         </text>
       </svg>
-    </div>
   );
 };
 

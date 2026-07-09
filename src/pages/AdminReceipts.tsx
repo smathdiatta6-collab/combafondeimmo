@@ -117,6 +117,7 @@ const AdminReceipts: React.FC = () => {
     date: new Date().toISOString().split('T')[0], 
     periodStart: prevDates.start,
     periodEnd: prevDates.end,
+    contractId: '',
     paymentMethodId: 'Especes', 
     reference: '',
     prestations: 0,
@@ -320,8 +321,8 @@ const AdminReceipts: React.FC = () => {
         await updateDoc(doc(db, 'receipts', editingId), { 
           ...newReceipt, 
           paymentMethodId: 'Especes',
-          updatedByUID: user?.uid,
-          updatedByName: user?.displayName || user?.email,
+          updatedByUID: user?.uid || '',
+          updatedByName: user?.displayName || user?.email || 'Admin',
           updatedAt: new Date().toISOString()
         });
         alert('Quittance mise à jour avec succès !');
@@ -330,8 +331,8 @@ const AdminReceipts: React.FC = () => {
           ...newReceipt, 
           paymentMethodId: 'Especes', 
           reference: '',
-          createdByUID: user?.uid,
-          createdByName: user?.displayName || user?.email,
+          createdByUID: user?.uid || '',
+          createdByName: user?.displayName || user?.email || 'Admin',
           createdAt: new Date().toISOString()
         });
 
@@ -354,6 +355,7 @@ const AdminReceipts: React.FC = () => {
         date: new Date().toISOString().split('T')[0], 
         periodStart: prevDates.start,
         periodEnd: prevDates.end,
+        contractId: '',
         paymentMethodId: 'Especes', 
         reference: '',
         prestations: 0,
@@ -1244,6 +1246,7 @@ const AdminReceipts: React.FC = () => {
                 setSelectedYear(new Date().getFullYear());
                 setNewReceipt({ 
                   clientName: '', 
+                  bailleurName: '',
                   amount: 0, 
                   amountInWords: '',
                   date: new Date().toISOString().split('T')[0], 

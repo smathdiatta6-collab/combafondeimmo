@@ -18,14 +18,18 @@ const SuperAdminDashboard: React.FC = () => {
   const [receipts, setReceipts] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [filteredReceipts, setFilteredReceipts] = useState<any[]>([]);
-  const [filter, setFilter] = useState<'day' | 'week' | 'month' | 'all'>('all');
+  const [filter, setFilter] = useState<'day' | 'week' | 'month' | 'all' | 'custom'>('all');
   const [stats, setStats] = useState<any[]>([]);
+  const [activityMonths, setActivityMonths] = useState<string[]>([
+    ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][new Date().getMonth()]
+  ]);
+  const [activityYear, setActivityYear] = useState<string>(`${new Date().getFullYear()}`);
 
   // Modern tracking tab states
   const [activeTab, setActiveTab] = useState<'activite' | 'suivi'>('activite');
-  const [suiviMonth, setSuiviMonth] = useState<string>(
+  const [suiviMonths, setSuiviMonths] = useState<string[]>([
     ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][new Date().getMonth()]
-  );
+  ]);
   const [suiviYear, setSuiviYear] = useState<string>(`${new Date().getFullYear()}`);
   const [suiviBailleur, setSuiviBailleur] = useState<string>('all');
   const [suiviSearch, setSuiviSearch] = useState<string>('');
@@ -58,9 +62,13 @@ const SuperAdminDashboard: React.FC = () => {
 
   useEffect(() => {
     if (user && isSuperAdmin) {
-      fetchData();
+      if (receipts.length === 0) {
+        fetchData();
+      } else {
+        calculateStats(receipts);
+      }
     }
-  }, [user, isSuperAdmin, filter]);
+  }, [user, isSuperAdmin, filter, activityMonths, activityYear, receipts]);
 
   const fetchData = async () => {
     try {
@@ -93,13 +101,24 @@ const SuperAdminDashboard: React.FC = () => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const filtered = receiptsList.filter(r => {
+      const dateVal = r.createdAt || r.date;
+      if (!dateVal) return false;
+      const date = new Date(dateVal);
+      
+      if (filter === 'custom') {
+        const rYear = date.getFullYear().toString();
+        const rMonthName = months[date.getMonth()];
+        const yearMatch = rYear === activityYear;
+        const monthMatch = activityMonths.includes(rMonthName);
+        return yearMatch && monthMatch;
+      }
+      
       if (filter === 'all') return true;
-      const date = new Date(r.createdAt);
       if (filter === 'day') return date >= startOfDay;
       if (filter === 'week') return date >= startOfWeek;
       if (filter === 'month') return date >= startOfMonth;
       return true;
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }).sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
 
     setFilteredReceipts(filtered);
   };
@@ -251,7 +270,9 @@ const SuperAdminDashboard: React.FC = () => {
     
     reports.forEach(report => {
       const reportMonth = report.mois || '';
-      const exactMonthMatch = reportMonth.toLowerCase().trim() === `${suiviMonth} ${suiviYear}`.toLowerCase().trim();
+      const exactMonthMatch = suiviMonths.some(m => 
+        reportMonth.toLowerCase().trim() === `${m} ${suiviYear}`.toLowerCase().trim()
+      );
       
       if (!exactMonthMatch) return;
       if (suiviBailleur !== 'all' && report.chez !== suiviBailleur) return;
@@ -302,7 +323,7 @@ const SuperAdminDashboard: React.FC = () => {
     });
     
     return list;
-  }, [reports, suiviMonth, suiviYear, suiviBailleur, suiviSearch, suiviStatusFilter]);
+  }, [reports, suiviMonths, suiviYear, suiviBailleur, suiviSearch, suiviStatusFilter]);
 
   const trackingMetrics = React.useMemo(() => {
     let totalLoyer = 0;
@@ -315,7 +336,9 @@ const SuperAdminDashboard: React.FC = () => {
     
     reports.forEach(report => {
       const reportMonth = report.mois || '';
-      const exactMonthMatch = reportMonth.toLowerCase().trim() === `${suiviMonth} ${suiviYear}`.toLowerCase().trim();
+      const exactMonthMatch = suiviMonths.some(m => 
+        reportMonth.toLowerCase().trim() === `${m} ${suiviYear}`.toLowerCase().trim()
+      );
       
       if (!exactMonthMatch) return;
       if (suiviBailleur !== 'all' && report.chez !== suiviBailleur) return;
@@ -352,7 +375,7 @@ const SuperAdminDashboard: React.FC = () => {
       countUnpaid,
       recoveryRate
     };
-  }, [reports, suiviMonth, suiviYear, suiviBailleur]);
+  }, [reports, suiviMonths, suiviYear, suiviBailleur]);
 
   // Compute unique tenant names across all history
   const allUniqueTenantsList = React.useMemo(() => {
@@ -365,6 +388,37 @@ const SuperAdminDashboard: React.FC = () => {
     });
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [reports]);
+
+  // Group accumulated payments by month for elegant, unmixed display
+  const accumulatedPaymentsByMonth = React.useMemo(() => {
+    const groups: { [key: string]: any[] } = {};
+    accumulatedPayments.forEach(p => {
+      const m = p.mois || 'Mois indéfini';
+      if (!groups[m]) {
+        groups[m] = [];
+      }
+      groups[m].push(p);
+    });
+    return groups;
+  }, [accumulatedPayments]);
+
+  // Group receipts by month for team activity display
+  const receiptsByMonth = React.useMemo(() => {
+    const groups: { [key: string]: any[] } = {};
+    filteredReceipts.forEach(r => {
+      const dateVal = r.createdAt || r.date;
+      if (!dateVal) return;
+      const date = new Date(dateVal);
+      const monthName = months[date.getMonth()];
+      const year = date.getFullYear();
+      const groupKey = `${monthName} ${year}`;
+      if (!groups[groupKey]) {
+        groups[groupKey] = [];
+      }
+      groups[groupKey].push(r);
+    });
+    return groups;
+  }, [filteredReceipts]);
 
   // If there's no selected tenant history yet, select the first one in the list automatically
   useEffect(() => {
@@ -483,19 +537,20 @@ const SuperAdminDashboard: React.FC = () => {
           <>
             {/* Period filter control for Activity */}
             <div className="flex justify-end mb-6">
-              <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100">
+              <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-gray-100 flex-wrap">
                 {[
                   { id: 'all', label: 'Tout' },
                   { id: 'day', label: 'Jour' },
                   { id: 'week', label: 'Semaine' },
-                  { id: 'month', label: 'Mois' }
+                  { id: 'month', label: 'Mois' },
+                  { id: 'custom', label: 'Mois Spécifiques 📅' }
                 ].map((f) => (
                   <button
                     key={f.id}
                     type="button"
                     onClick={() => setFilter(f.id as any)}
                     className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
-                      filter === f.id ? 'bg-blue-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
+                      filter === f.id ? 'bg-blue-900 text-white shadow-md font-black' : 'text-gray-500 hover:bg-gray-50'
                     }`}
                   >
                     {f.label}
@@ -503,6 +558,98 @@ const SuperAdminDashboard: React.FC = () => {
                 ))}
               </div>
             </div>
+
+            {filter === 'custom' && (
+              <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col gap-6 mb-8">
+                <div className="flex flex-wrap gap-4 items-center justify-between">
+                  <div className="flex items-center gap-2 text-gray-800 font-bold">
+                    <Calendar size={18} className="text-blue-900" />
+                    <span>Sélectionner les mois et l'année pour l'Activité Équipe</span>
+                  </div>
+                  {/* Reset button */}
+                  {(activityMonths.length !== 1 || activityMonths[0] !== months[new Date().getMonth()] || activityYear !== `${new Date().getFullYear()}`) && (
+                    <button
+                      onClick={() => {
+                        setActivityMonths([months[new Date().getMonth()]]);
+                        setActivityYear(`${new Date().getFullYear()}`);
+                      }}
+                      className="text-xs text-blue-600 hover:underline font-bold"
+                    >
+                      Réinitialiser la période
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Year Dropdown */}
+                  <div className="relative">
+                    <span className="block text-xs font-bold text-gray-500 mb-2">Année de recherche</span>
+                    <div className="relative">
+                      <select
+                        className="w-full pl-4 pr-8 py-3 bg-gray-50 border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-900 appearance-none bg-blue-50/50"
+                        value={activityYear}
+                        onChange={(e) => setActivityYear(e.target.value)}
+                      >
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900 pointer-events-none" size={16} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Multi-month selection */}
+                <div className="space-y-3 border-t border-gray-100 pt-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <span className="text-sm font-extrabold text-blue-900 flex items-center gap-1.5">
+                      <Calendar size={16} />
+                      Choisissez les mois d'activité (Sélection multiple) :
+                    </span>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setActivityMonths(months)}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                      >
+                        Tous les mois
+                      </button>
+                      <span className="text-gray-300 text-xs">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setActivityMonths([])}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                      >
+                        Aucun
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2 bg-gray-50 p-4 rounded-2xl">
+                    {months.map((m) => {
+                      const isSelected = activityMonths.includes(m);
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setActivityMonths(prev => prev.filter(x => x !== m));
+                            } else {
+                              setActivityMonths(prev => [...prev, m]);
+                            }
+                          }}
+                          className={`py-2 px-1 rounded-xl text-xs font-extrabold border transition-all text-center ${
+                            isSelected
+                              ? 'bg-blue-900 text-white border-blue-900 shadow-md scale-102 font-black'
+                              : 'bg-white text-gray-700 border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
@@ -543,59 +690,72 @@ const SuperAdminDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filteredReceipts.map((r) => (
-                      <tr key={r.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-8 py-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-900 text-white rounded-full flex items-center justify-center font-bold">
-                              {r.createdByName?.charAt(0) || '?'}
-                            </div>
-                            <div>
-                              <p className="font-bold text-gray-900">{r.createdByName || 'Inconnu'}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-8 py-6">
-                          {r.requestedBy ? (
-                            <span className={`px-4 py-2 rounded-xl text-xs font-bold ${
-                              r.requestedBy === 'OMAR' 
-                                ? 'bg-amber-100 text-amber-700' 
-                                : r.requestedBy === 'AMY' 
-                                ? 'bg-pink-100 text-pink-700' 
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {r.requestedBy}
-                            </span>
-                          ) : (
-                            <span className="text-gray-300 italic text-xs">Non spécifié</span>
-                          )}
-                        </td>
-                        <td className="px-8 py-6">
-                          <span className="font-medium text-gray-900">{r.clientName}</span>
-                        </td>
-                        <td className="px-8 py-6">
-                          <span className="font-bold text-green-600">{formatAmount(r.amount)} FCFA</span>
-                        </td>
-                        <td className="px-8 py-6 text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <Calendar size={14} />
-                            {new Date(r.createdAt).toLocaleDateString('fr-FR')}
-                          </div>
-                        </td>
-                        <td className="px-8 py-6 text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <Clock size={14} />
-                            {new Date(r.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredReceipts.length === 0 && (
+                    {Object.keys(receiptsByMonth).length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-8 py-12 text-center text-gray-500">
                           Aucun paiement enregistré pour cette période.
                         </td>
                       </tr>
+                    ) : (
+                      (Object.entries(receiptsByMonth) as [string, any[]][]).map(([monthYear, items]) => (
+                        <React.Fragment key={monthYear}>
+                          <tr className="bg-blue-50/40 border-y border-blue-100/30">
+                            <td colSpan={6} className="px-8 py-3 text-xs font-black text-blue-900 uppercase tracking-wider font-mono bg-blue-50/20">
+                              <span className="flex items-center gap-2">
+                                <Calendar size={14} className="text-blue-900" />
+                                {monthYear} — ({items.length} règlement{items.length > 1 ? 's' : ''})
+                              </span>
+                            </td>
+                          </tr>
+                          {items.map((r) => (
+                            <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-8 py-6">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-blue-900 text-white rounded-full flex items-center justify-center font-bold">
+                                    {r.createdByName?.charAt(0) || '?'}
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-gray-900">{r.createdByName || 'Inconnu'}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-8 py-6">
+                                {r.requestedBy ? (
+                                  <span className={`px-4 py-2 rounded-xl text-xs font-bold ${
+                                    r.requestedBy === 'OMAR' 
+                                      ? 'bg-amber-100 text-amber-700' 
+                                      : r.requestedBy === 'AMY' 
+                                      ? 'bg-pink-100 text-pink-700' 
+                                      : 'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    {r.requestedBy}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300 italic text-xs">Non spécifié</span>
+                                )}
+                              </td>
+                              <td className="px-8 py-6">
+                                <span className="font-medium text-gray-900">{r.clientName}</span>
+                              </td>
+                              <td className="px-8 py-6">
+                                <span className="font-bold text-green-600">{formatAmount(r.amount)} FCFA</span>
+                              </td>
+                              <td className="px-8 py-6 text-gray-600">
+                                <div className="flex items-center gap-2">
+                                  <Calendar size={14} />
+                                  {new Date(r.createdAt).toLocaleDateString('fr-FR')}
+                                </div>
+                              </td>
+                              <td className="px-8 py-6 text-gray-600">
+                                <div className="flex items-center gap-2">
+                                  <Clock size={14} />
+                                  {new Date(r.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      ))
                     )}
                   </tbody>
                 </table>
@@ -643,12 +803,13 @@ const SuperAdminDashboard: React.FC = () => {
                       <span>Filtres de Suivi</span>
                     </div>
                     {/* Reset Filters button */}
-                    {(suiviSearch || suiviBailleur !== 'all' || suiviStatusFilter !== 'all') && (
+                    {(suiviSearch || suiviBailleur !== 'all' || suiviStatusFilter !== 'all' || suiviMonths.length !== 1 || suiviMonths[0] !== months[new Date().getMonth()]) && (
                       <button
                         onClick={() => {
                           setSuiviSearch('');
                           setSuiviBailleur('all');
                           setSuiviStatusFilter('all');
+                          setSuiviMonths([months[new Date().getMonth()]]);
                         }}
                         className="text-xs text-blue-600 hover:underline font-bold"
                       >
@@ -657,7 +818,7 @@ const SuperAdminDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Search Field */}
                     <div className="relative">
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -685,18 +846,6 @@ const SuperAdminDashboard: React.FC = () => {
                       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
                     </div>
 
-                    {/* Month Dropdown */}
-                    <div className="relative">
-                      <select
-                        className="w-full pl-4 pr-8 py-3 bg-gray-50 border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-900 appearance-none bg-blue-50/50 mr-2"
-                        value={suiviMonth}
-                        onChange={(e) => setSuiviMonth(e.target.value)}
-                      >
-                        {months.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900 pointer-events-none" size={16} />
-                    </div>
-
                     {/* Year Dropdown */}
                     <div className="relative">
                       <select
@@ -707,6 +856,58 @@ const SuperAdminDashboard: React.FC = () => {
                         {years.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
                       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900 pointer-events-none" size={16} />
+                    </div>
+                  </div>
+
+                  {/* Multi-month selection */}
+                  <div className="space-y-3 border-t border-gray-100 pt-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                      <span className="text-sm font-extrabold text-blue-900 flex items-center gap-1.5">
+                        <Calendar size={16} />
+                        Choisissez les mois à afficher (Sélection multiple) :
+                      </span>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSuiviMonths(months)}
+                          className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                        >
+                          Tous les mois
+                        </button>
+                        <span className="text-gray-300 text-xs">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setSuiviMonths([])}
+                          className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                        >
+                          Aucun
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2 bg-gray-50 p-4 rounded-2xl">
+                      {months.map((m) => {
+                        const isSelected = suiviMonths.includes(m);
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setSuiviMonths(prev => prev.filter(x => x !== m));
+                              } else {
+                                setSuiviMonths(prev => [...prev, m]);
+                              }
+                            }}
+                            className={`py-2 px-1 rounded-xl text-xs font-extrabold border transition-all text-center ${
+                              isSelected
+                                ? 'bg-blue-900 text-white border-blue-900 shadow-md scale-102 font-black'
+                                : 'bg-white text-gray-700 border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -845,86 +1046,98 @@ const SuperAdminDashboard: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50 text-sm">
-                          {accumulatedPayments.map((p, idx) => {
-                            const pct = p.loyer > 0 ? Math.min(100, Math.round((p.paye / p.loyer) * 100)) : 0;
-                            return (
-                              <tr key={`${p.reportId}_${p.itemIndex}_${idx}`} className="hover:bg-blue-50/10 transition-colors">
-                                <td className="px-8 py-5">
-                                  <div className="font-bold text-gray-900">{p.fullName}</div>
-                                  <div className="text-xs text-gray-400 font-semibold flex items-center gap-1.5 mt-0.5 font-mono">
-                                    <Building size={12} />
-                                    {p.villaNumber ? `Villa ${p.villaNumber}` : 'Local non spécifié'}
-                                  </div>
-                                </td>
-                                <td className="px-8 py-5 font-bold text-gray-600">
-                                  Chez {p.bailleurName}
-                                </td>
-                                <td className="px-8 py-5 text-right font-mono font-bold text-gray-700">
-                                  {formatAmount(p.loyer)} {p.currency.trim()}
-                                </td>
-                                <td className="px-8 py-5 text-right font-mono font-bold text-green-700 bg-green-50/10">
-                                  {formatAmount(p.paye)} {p.currency.trim()}
-                                </td>
-                                <td className="px-8 py-5 text-right font-mono font-bold text-red-600 bg-red-50/10">
-                                  {formatAmount(p.nonPaye)} {p.currency.trim()}
-                                </td>
-                                <td className="px-8 py-5 text-center">
-                                  <div className="flex flex-col items-center gap-1">
-                                    <span className="text-[10px] font-mono font-bold text-gray-500">{pct}%</span>
-                                    <div className="w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                      <div 
-                                        className={`h-full rounded-full transition-all ${
-                                          p.status === 'paid' ? 'bg-green-500' : p.status === 'partial' ? 'bg-amber-400' : 'bg-red-500'
-                                        }`} 
-                                        style={{ width: `${pct}%` }} 
-                                      />
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-8 py-5 text-center">
-                                  {p.status === 'paid' && (
-                                    <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full font-bold">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                      Payé
-                                    </span>
-                                  )}
-                                  {p.status === 'partial' && (
-                                    <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                      Partiel
-                                    </span>
-                                  )}
-                                  {p.status === 'unpaid' && (
-                                    <span className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-bold">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                                      Non payé
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="px-8 py-5 text-right">
-                                  <button
-                                    onClick={() => {
-                                      setSelectedTenantPayment({
-                                        reportId: p.reportId,
-                                        itemIndex: p.itemIndex,
-                                        tenantName: p.fullName,
-                                        bailleurName: p.bailleurName,
-                                        mois: p.mois,
-                                        loyer: p.loyer,
-                                        paye: p.paye,
-                                        nonPaye: p.nonPaye,
-                                        currency: p.currency
-                                      });
-                                      setPaymentModalOpen(true);
-                                    }}
-                                    className="bg-blue-900/10 text-blue-950 hover:bg-blue-900 hover:text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all"
-                                  >
-                                    Enregistrer
-                                  </button>
+                          {(Object.entries(accumulatedPaymentsByMonth) as [string, any[]][]).map(([monthYear, items]) => (
+                            <React.Fragment key={monthYear}>
+                              <tr className="bg-blue-50/40 border-y border-blue-100/30">
+                                <td colSpan={8} className="px-8 py-3 text-xs font-black text-blue-900 uppercase tracking-wider font-mono bg-blue-50/20">
+                                  <span className="flex items-center gap-2">
+                                    <Calendar size={14} className="text-blue-900" />
+                                    {monthYear} — ({items.length} locataire{items.length > 1 ? 's' : ''} indexé{items.length > 1 ? 's' : ''})
+                                  </span>
                                 </td>
                               </tr>
-                            );
-                          })}
+                              {items.map((p, idx) => {
+                                const pct = p.loyer > 0 ? Math.min(100, Math.round((p.paye / p.loyer) * 100)) : 0;
+                                return (
+                                  <tr key={`${p.reportId}_${p.itemIndex}_${idx}`} className="hover:bg-blue-50/10 transition-colors">
+                                    <td className="px-8 py-5">
+                                      <div className="font-bold text-gray-900">{p.fullName}</div>
+                                      <div className="text-xs text-gray-400 font-semibold flex items-center gap-1.5 mt-0.5 font-mono">
+                                        <Building size={12} />
+                                        {p.villaNumber ? `Villa ${p.villaNumber}` : 'Local non spécifié'}
+                                      </div>
+                                    </td>
+                                    <td className="px-8 py-5 font-bold text-gray-600">
+                                      Chez {p.bailleurName}
+                                    </td>
+                                    <td className="px-8 py-5 text-right font-mono font-bold text-gray-700">
+                                      {formatAmount(p.loyer)} {p.currency.trim()}
+                                    </td>
+                                    <td className="px-8 py-5 text-right font-mono font-bold text-green-700 bg-green-50/10">
+                                      {formatAmount(p.paye)} {p.currency.trim()}
+                                    </td>
+                                    <td className="px-8 py-5 text-right font-mono font-bold text-red-600 bg-red-50/10">
+                                      {formatAmount(p.nonPaye)} {p.currency.trim()}
+                                    </td>
+                                    <td className="px-8 py-5 text-center">
+                                      <div className="flex flex-col items-center gap-1">
+                                        <span className="text-[10px] font-mono font-bold text-gray-500">{pct}%</span>
+                                        <div className="w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                          <div 
+                                            className={`h-full rounded-full transition-all ${
+                                              p.status === 'paid' ? 'bg-green-500' : p.status === 'partial' ? 'bg-amber-400' : 'bg-red-500'
+                                            }`} 
+                                            style={{ width: `${pct}%` }} 
+                                          />
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="px-8 py-5 text-center">
+                                      {p.status === 'paid' && (
+                                        <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full font-bold">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                          Payé
+                                        </span>
+                                      )}
+                                      {p.status === 'partial' && (
+                                        <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                          Partiel
+                                        </span>
+                                      )}
+                                      {p.status === 'unpaid' && (
+                                        <span className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-bold">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                          Non payé
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-8 py-5 text-right">
+                                      <button
+                                        onClick={() => {
+                                          setSelectedTenantPayment({
+                                            reportId: p.reportId,
+                                            itemIndex: p.itemIndex,
+                                            tenantName: p.fullName,
+                                            bailleurName: p.bailleurName,
+                                            mois: p.mois,
+                                            loyer: p.loyer,
+                                            paye: p.paye,
+                                            nonPaye: p.nonPaye,
+                                            currency: p.currency
+                                          });
+                                          setPaymentModalOpen(true);
+                                        }}
+                                        className="bg-blue-900/10 text-blue-950 hover:bg-blue-900 hover:text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all"
+                                      >
+                                        Enregistrer
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </React.Fragment>
+                          ))}
                         </tbody>
                       </table>
                     </div>
