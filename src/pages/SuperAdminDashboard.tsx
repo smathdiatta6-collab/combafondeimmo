@@ -35,6 +35,7 @@ const SuperAdminDashboard: React.FC = () => {
   const [suiviBailleur, setSuiviBailleur] = useState<string>('all');
   const [suiviSearch, setSuiviSearch] = useState<string>('');
   const [suiviStatusFilter, setSuiviStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
+  const [suiviPeriodScope, setSuiviPeriodScope] = useState<'selected' | 'onwards'>('selected');
 
   // Quick Payment Editor Modal
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -271,11 +272,36 @@ const SuperAdminDashboard: React.FC = () => {
     
     reports.forEach(report => {
       const reportMonth = report.mois || '';
-      const exactMonthMatch = suiviMonths.some(m => 
-        reportMonth.toLowerCase().trim() === `${m} ${suiviYear}`.toLowerCase().trim()
-      );
       
-      if (!exactMonthMatch) return;
+      let isMonthMatch = false;
+      if (suiviPeriodScope === 'selected') {
+        isMonthMatch = suiviMonths.some(m => 
+          reportMonth.toLowerCase().trim() === `${m} ${suiviYear}`.toLowerCase().trim()
+        );
+      } else {
+        // 'onwards': Find minimum selected month index. Match any month equal or greater than that in the same year, or any month in a greater year.
+        const monthsLower = months.map(m => m.toLowerCase());
+        const selectedIndices = suiviMonths.map(m => monthsLower.indexOf(m.toLowerCase().trim())).filter(idx => idx !== -1);
+        const minSelectedIdx = selectedIndices.length > 0 ? Math.min(...selectedIndices) : 0;
+        
+        const reportParts = reportMonth.split(' ');
+        if (reportParts.length >= 2) {
+          const rMName = reportParts[0].toLowerCase().trim();
+          const rYear = parseInt(reportParts[1]);
+          const rMIndex = monthsLower.indexOf(rMName);
+          const sYear = parseInt(suiviYear);
+          
+          if (!isNaN(rYear) && rMIndex !== -1 && !isNaN(sYear)) {
+            if (rYear > sYear) {
+              isMonthMatch = true;
+            } else if (rYear === sYear && rMIndex >= minSelectedIdx) {
+              isMonthMatch = true;
+            }
+          }
+        }
+      }
+      
+      if (!isMonthMatch) return;
       if (suiviBailleur !== 'all' && report.chez !== suiviBailleur) return;
       
       (report.items || []).forEach((item: any, idx: number) => {
@@ -324,7 +350,7 @@ const SuperAdminDashboard: React.FC = () => {
     });
     
     return list;
-  }, [reports, suiviMonths, suiviYear, suiviBailleur, suiviSearch, suiviStatusFilter]);
+  }, [reports, suiviMonths, suiviYear, suiviBailleur, suiviSearch, suiviStatusFilter, suiviPeriodScope]);
 
   const trackingMetrics = React.useMemo(() => {
     let totalLoyer = 0;
@@ -408,7 +434,7 @@ const SuperAdminDashboard: React.FC = () => {
   const [syncResult, setSyncResult] = useState<{ updated: number; created: number; total: number } | null>(null);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncSetupOpen, setSyncSetupOpen] = useState(false);
-  const [syncScope, setSyncScope] = useState<'filtered' | 'current' | 'allYear'>('current');
+  const [syncScope, setSyncScope] = useState<'filtered' | 'current' | 'june' | 'allYear'>('current');
   const [syncBailleurScope, setSyncBailleurScope] = useState<'all' | 'selected'>('all');
 
   // Compute target payments matching the selected sync scope
@@ -432,6 +458,8 @@ const SuperAdminDashboard: React.FC = () => {
         const curMonthName = months[new Date().getMonth()];
         const curYear = new Date().getFullYear().toString();
         isMonthMatch = reportMonth.toLowerCase().trim() === `${curMonthName} ${curYear}`.toLowerCase().trim();
+      } else if (syncScope === 'june') {
+        isMonthMatch = rMName.toLowerCase() === 'juin' && rYStr === suiviYear;
       } else if (syncScope === 'allYear') {
         isMonthMatch = rYStr === suiviYear;
       }
@@ -635,6 +663,23 @@ const SuperAdminDashboard: React.FC = () => {
 
       setSyncResult({ updated, created, total });
       setSyncModalOpen(true);
+
+      // Auto-update team activity months filter to match sync months so they see them immediately!
+      if (activePayments.length > 0) {
+        const syncedMonths = Array.from(new Set(activePayments.map(p => {
+          const parts = p.mois.split(' ');
+          return parts[0];
+        })));
+        if (syncedMonths.length > 0) {
+          setFilter('custom');
+          setActivityMonths(syncedMonths);
+          const firstYear = activePayments[0].mois.split(' ')[1];
+          if (firstYear) {
+            setActivityYear(firstYear);
+          }
+        }
+      }
+
       await fetchData(); // Reload all data to keep stats fresh
     } catch (e) {
       console.error(e);
@@ -1064,12 +1109,13 @@ const SuperAdminDashboard: React.FC = () => {
                       <span>Filtres de Suivi</span>
                     </div>
                     {/* Reset Filters button */}
-                    {(suiviSearch || suiviBailleur !== 'all' || suiviStatusFilter !== 'all' || suiviMonths.length !== 1 || suiviMonths[0] !== months[new Date().getMonth()]) && (
+                    {(suiviSearch || suiviBailleur !== 'all' || suiviStatusFilter !== 'all' || suiviPeriodScope !== 'selected' || suiviMonths.length !== 1 || suiviMonths[0] !== months[new Date().getMonth()]) && (
                       <button
                         onClick={() => {
                           setSuiviSearch('');
                           setSuiviBailleur('all');
                           setSuiviStatusFilter('all');
+                          setSuiviPeriodScope('selected');
                           setSuiviMonths([months[new Date().getMonth()]]);
                         }}
                         className="text-xs text-blue-600 hover:underline font-bold"
@@ -1079,7 +1125,7 @@ const SuperAdminDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     {/* Search Field */}
                     <div className="relative">
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -1110,13 +1156,26 @@ const SuperAdminDashboard: React.FC = () => {
                     {/* Year Dropdown */}
                     <div className="relative">
                       <select
-                        className="w-full pl-4 pr-8 py-3 bg-gray-50 border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-900 appearance-none bg-blue-50/50 mr-2"
+                        className="w-full pl-4 pr-8 py-3 bg-gray-50 border border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-900 appearance-none bg-blue-50/50"
                         value={suiviYear}
                         onChange={(e) => setSuiviYear(e.target.value)}
                       >
                         {years.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
                       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-900 pointer-events-none" size={16} />
+                    </div>
+
+                    {/* Scope Selector */}
+                    <div className="relative">
+                      <select
+                        className="w-full pl-4 pr-8 py-3 bg-indigo-50/50 border border-transparent rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-indigo-900 appearance-none"
+                        value={suiviPeriodScope}
+                        onChange={(e) => setSuiviPeriodScope(e.target.value as 'selected' | 'onwards')}
+                      >
+                        <option value="selected">Mois sélectionnés uniquement</option>
+                        <option value="onwards">Ce mois et mois suivants ➔</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-900 pointer-events-none" size={16} />
                     </div>
                   </div>
 
@@ -1767,6 +1826,30 @@ const SuperAdminDashboard: React.FC = () => {
                       <span className="font-extrabold text-sm text-gray-950 block">Mois en cours uniquement</span>
                       <span className="text-xs text-gray-500 font-semibold">
                         Génère pour le mois de {months[new Date().getMonth()]} {new Date().getFullYear()}
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSyncScope('june')}
+                    className={`p-4 rounded-2xl border text-left flex items-start gap-3 transition-all ${
+                      syncScope === 'june'
+                        ? 'bg-blue-50/50 border-blue-900 ring-2 ring-blue-900/10'
+                        : 'bg-white hover:bg-gray-50 border-gray-100'
+                    }`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        syncScope === 'june' ? 'border-blue-900' : 'border-gray-300'
+                      }`}>
+                        {syncScope === 'june' && <div className="w-2 h-2 rounded-full bg-blue-900" />}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="font-extrabold text-sm text-gray-950 block">Mois de Juin {suiviYear} uniquement</span>
+                      <span className="text-xs text-gray-500 font-semibold">
+                        Génère et synchronise spécifiquement pour le mois de Juin {suiviYear} (Option recommandée)
                       </span>
                     </div>
                   </button>
