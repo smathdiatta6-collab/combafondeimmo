@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, getDocs, query, where, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { 
   ShieldCheck, ArrowLeft, Users, Receipt, TrendingUp, Calendar, Clock, 
-  CheckCircle2, AlertCircle, Building, User, ArrowRight, Search, ChevronDown, Filter, X 
+  CheckCircle2, AlertCircle, Building, User, ArrowRight, Search, ChevronDown, Filter, X,
+  RefreshCw, Coins, Ban
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import Logo from '../components/Logo';
@@ -399,6 +400,176 @@ const SuperAdminDashboard: React.FC = () => {
       }
       groups[m].push(p);
     });
+    return groups;
+  }, [accumulatedPayments]);
+
+  // Syncing quittances states
+  const [syncingReceipts, setSyncingReceipts] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ updated: number; created: number; total: number } | null>(null);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+
+  // Helper to determine if a receipt matches a target month/year
+  const isReceiptMatchingMonth = (r: any, targetMois: string) => {
+    const [mName, yStr] = targetMois.split(' ');
+    const monthsMap: { [key: string]: number } = {
+      'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3, 'mai': 4, 'juin': 5,
+      'juillet': 6, 'août': 7, 'septembre': 8, 'octobre': 9, 'novembre': 10, 'décembre': 11
+    };
+    const targetMonthIndex = monthsMap[mName.toLowerCase().trim()];
+    const targetYear = parseInt(yStr);
+
+    if (isNaN(targetMonthIndex) || isNaN(targetYear)) return false;
+
+    if (r.periodStart) {
+      const d = new Date(r.periodStart);
+      if (d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex) {
+        return true;
+      }
+    }
+    if (r.date) {
+      const d = new Date(r.date);
+      if (d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex) {
+        return true;
+      }
+    }
+    if (r.createdAt) {
+      const d = new Date(r.createdAt);
+      if (d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex) {
+        return true;
+      }
+    }
+    if (r.periodLabel) {
+      const label = r.periodLabel.toLowerCase();
+      if (label.includes(mName.toLowerCase()) && label.includes(yStr)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const handleSyncReceipts = async () => {
+    if (accumulatedPayments.length === 0) {
+      alert("Aucun paiement trouvé pour les mois et bailleurs sélectionnés.");
+      return;
+    }
+
+    const confirmSync = window.confirm(
+      `Voulez-vous synchroniser et mettre à jour les quittances pour les ${accumulatedPayments.length} locataires de la sélection ?\n\n` +
+      `- Les quittances existantes dont le montant diffère du paiement seront mises à jour.\n` +
+      `- Les quittances manquantes pour les locataires ayant payé seront créées.`
+    );
+    if (!confirmSync) return;
+
+    setSyncingReceipts(true);
+    let created = 0;
+    let updated = 0;
+    let total = 0;
+
+    const monthsMap: { [key: string]: number } = {
+      'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3, 'mai': 4, 'juin': 5,
+      'juillet': 6, 'août': 7, 'septembre': 8, 'octobre': 9, 'novembre': 10, 'décembre': 11
+    };
+
+    try {
+      // Refresh receipts first to get the absolute latest state from Firestore
+      const receiptsSnap = await getDocs(collection(db, 'receipts'));
+      const currentReceipts = receiptsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      setReceipts(currentReceipts);
+
+      for (const p of accumulatedPayments) {
+        if (p.paye <= 0) continue;
+        total++;
+
+        // Find match in currentReceipts
+        const matchingReceipt = currentReceipts.find((r: any) => {
+          const clientNameMatch = r.clientName?.toLowerCase().trim() === p.fullName.toLowerCase().trim();
+          const bailleurNameMatch = r.bailleurName?.toLowerCase().trim() === p.bailleurName.toLowerCase().trim();
+          
+          if (!clientNameMatch || !bailleurNameMatch) return false;
+          return isReceiptMatchingMonth(r, p.mois);
+        });
+
+        const [mName, yStr] = p.mois.split(' ');
+        const mIndex = monthsMap[mName.toLowerCase().trim()] !== undefined ? monthsMap[mName.toLowerCase().trim()] : 0;
+        const yearNum = parseInt(yStr) || new Date().getFullYear();
+        const start = new Date(yearNum, mIndex, 1).toISOString().split('T')[0];
+        const end = new Date(yearNum, mIndex + 1, 0).toISOString().split('T')[0];
+
+        if (matchingReceipt) {
+          // If amount is different, update
+          if (getSafeNum(matchingReceipt.amount) !== p.paye || matchingReceipt.status !== 'Payé') {
+            const rRef = doc(db, 'receipts', matchingReceipt.id);
+            await updateDoc(rRef, {
+              amount: p.paye,
+              amountInWords: numberToWordsFrench(p.paye),
+              status: 'Payé',
+              updatedAt: new Date().toISOString(),
+              updatedByName: user?.displayName || user?.email || 'Admin'
+            });
+            updated++;
+          }
+        } else {
+          // Create new receipt
+          const matchingContract = contracts.find(c => 
+            c.clientName?.toLowerCase().includes(p.nom.toLowerCase()) ||
+            p.nom.toLowerCase().includes(c.clientName?.toLowerCase())
+          );
+
+          await addDoc(collection(db, 'receipts'), {
+            clientName: p.fullName,
+            bailleurName: p.bailleurName,
+            amount: p.paye,
+            amountInWords: numberToWordsFrench(p.paye),
+            date: new Date().toISOString().split('T')[0],
+            periodStart: start,
+            periodEnd: end,
+            contractId: matchingContract?.id || '',
+            paymentMethodId: 'Especes',
+            reference: '',
+            prestations: 0,
+            timbre: 0,
+            caution: 0,
+            cautionLabel: '',
+            cautionMonths: 0,
+            periodLabel: `un mois de ${mName.toLowerCase()}`,
+            propertyAddress: `Cité BATA chez ${p.bailleurName}`,
+            status: 'Payé',
+            createdByUID: user?.uid || '',
+            createdByName: user?.displayName || user?.email || 'Admin',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          created++;
+        }
+      }
+
+      setSyncResult({ updated, created, total });
+      setSyncModalOpen(true);
+      await fetchData(); // Reload all data to keep stats fresh
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la synchronisation des quittances.");
+    } finally {
+      setSyncingReceipts(false);
+    }
+  };
+
+  // Group unpaid or partial payments by bailleur for detailed reporting
+  const unpaidByBailleur = React.useMemo(() => {
+    const groups: { [bailleur: string]: { items: any[]; totalUnpaid: number; totalLoyer: number } } = {};
+    
+    accumulatedPayments.forEach(p => {
+      if (p.status === 'unpaid' || p.status === 'partial') {
+        const b = p.bailleurName || 'Bailleur non spécifié';
+        if (!groups[b]) {
+          groups[b] = { items: [], totalUnpaid: 0, totalLoyer: 0 };
+        }
+        groups[b].items.push(p);
+        groups[b].totalUnpaid += p.nonPaye;
+        groups[b].totalLoyer += p.loyer;
+      }
+    });
+    
     return groups;
   }, [accumulatedPayments]);
 
@@ -1013,16 +1184,117 @@ const SuperAdminDashboard: React.FC = () => {
                   </button>
                 </div>
 
+                {/* STATE OF UNPAID/LATE TENANTS GROUPED BY LANDLORD */}
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100/50 pb-5">
+                    <div>
+                      <h4 className="text-xl font-bold text-gray-900 font-sans flex items-center gap-2">
+                        <AlertCircle className="text-red-500 animate-pulse" size={22} />
+                        État des Impayés par Bailleur (Qui n'a pas payé ?)
+                      </h4>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Savoir qui n'a pas payé au niveau de chaque bailleur pour les mois et filtres sélectionnés.
+                      </p>
+                    </div>
+                    <span className="text-xs bg-red-50 text-red-700 px-3.5 py-2 rounded-2xl font-black font-sans">
+                      {Object.keys(unpaidByBailleur).length} Bailleur{Object.keys(unpaidByBailleur).length > 1 ? 's' : ''} en attente
+                    </span>
+                  </div>
+
+                  {Object.keys(unpaidByBailleur).length === 0 ? (
+                    <div className="py-12 text-center text-emerald-600 bg-emerald-50/50 rounded-3xl flex flex-col items-center justify-center gap-2 border border-emerald-100">
+                      <CheckCircle2 size={40} className="text-emerald-500" />
+                      <p className="font-extrabold text-sm">Félicitations ! Tous les locataires sont à jour pour les bailleurs et mois sélectionnés.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {Object.entries(unpaidByBailleur).map(([bailleur, data]: [string, any]) => (
+                        <div key={bailleur} className="border border-red-100 rounded-[2rem] overflow-hidden bg-red-50/5 flex flex-col shadow-sm">
+                          {/* Bailleur Header */}
+                          <div className="bg-red-50/20 px-6 py-4.5 border-b border-red-100/50 flex items-center justify-between">
+                            <span className="font-black text-gray-900 text-sm tracking-wide">
+                              Bailleur : {bailleur}
+                            </span>
+                            <span className="text-xs bg-red-100/80 text-red-800 font-black px-3 py-1.5 rounded-xl font-mono">
+                              Impayé : {formatAmount(data.totalUnpaid)} FCFA
+                            </span>
+                          </div>
+                          
+                          {/* Tenants list */}
+                          <div className="divide-y divide-red-100/40 px-6 py-2 flex-1">
+                            {data.items.map((p: any) => {
+                              const remainingPercent = p.loyer > 0 ? Math.round((p.nonPaye / p.loyer) * 100) : 0;
+                              return (
+                                <div key={`${p.reportId}_${p.itemIndex}`} className="py-4.5 flex items-center justify-between gap-4">
+                                  <div className="space-y-1 min-w-0">
+                                    <p className="font-bold text-gray-950 text-sm truncate">{p.fullName}</p>
+                                    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 font-bold font-mono">
+                                      <span>Villa {p.villaNumber || 'N/A'}</span>
+                                      <span>•</span>
+                                      <span className="text-blue-900 bg-blue-50/50 px-1.5 py-0.5 rounded">{p.mois}</span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    <div className="text-right space-y-0.5">
+                                      <p className="font-extrabold text-red-600 text-sm font-mono">+{formatAmount(p.nonPaye)} {p.currency.trim()}</p>
+                                      <p className="text-[10px] text-gray-400 font-bold">
+                                        Sur {formatAmount(p.loyer)} Loyer (Reste {remainingPercent}%)
+                                      </p>
+                                    </div>
+                                    
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedTenantPayment({
+                                          reportId: p.reportId,
+                                          itemIndex: p.itemIndex,
+                                          tenantName: p.fullName,
+                                          bailleurName: p.bailleurName,
+                                          mois: p.mois,
+                                          loyer: p.loyer,
+                                          paye: p.paye,
+                                          nonPaye: p.nonPaye,
+                                          currency: p.currency
+                                        });
+                                        setPaymentModalOpen(true);
+                                      }}
+                                      className="p-2.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl transition-all shadow-sm"
+                                      title="Enregistrer règlement"
+                                    >
+                                      <Coins size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* 3. PAYMENTS TABLE */}
                 <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="p-8 border-b border-gray-50 flex items-center justify-between">
+                  <div className="p-8 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                       <h4 className="text-xl font-bold text-gray-900 font-sans">Suivi des règlements d'honoraires</h4>
                       <p className="text-xs text-gray-400 mt-1">Saisissez les règlements pour ajuster en direct le bilan du bailleur lié.</p>
                     </div>
-                    <span className="text-xs bg-blue-50 text-blue-800 px-3 py-1.5 rounded-full font-bold">
-                      {accumulatedPayments.length} locataire{accumulatedPayments.length > 1 ? 's' : ''} indexé{accumulatedPayments.length > 1 ? 's' : ''}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={handleSyncReceipts}
+                        disabled={syncingReceipts || accumulatedPayments.length === 0}
+                        className={`bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-extrabold text-xs px-4 py-3 rounded-2xl transition-all shadow-sm flex items-center gap-2 ${syncingReceipts ? 'opacity-75 cursor-not-allowed' : ''}`}
+                      >
+                        <Receipt size={14} className={syncingReceipts ? 'animate-spin' : ''} />
+                        {syncingReceipts ? 'Mise à jour en cours...' : 'Mettre à jour les Quittances'}
+                      </button>
+                      <span className="text-xs bg-blue-50 text-blue-800 px-3.5 py-2 rounded-2xl font-bold">
+                        {accumulatedPayments.length} locataire{accumulatedPayments.length > 1 ? 's' : ''} indexé{accumulatedPayments.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
                   </div>
 
                   {accumulatedPayments.length === 0 ? (
@@ -1357,6 +1629,58 @@ const SuperAdminDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </Modal>
+        )}
+
+        {syncModalOpen && syncResult && (
+          <Modal
+            isOpen={syncModalOpen}
+            onClose={() => {
+              setSyncModalOpen(false);
+              setSyncResult(null);
+            }}
+            title="Synchronisation des Quittances"
+          >
+            <div className="space-y-6 text-center font-sans p-2">
+              <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                <CheckCircle2 size={36} />
+              </div>
+              <h3 className="text-xl font-black text-gray-950">Synchronisation réussie !</h3>
+              
+              <div className="bg-gray-50/80 p-6 rounded-3xl border border-gray-100 text-left space-y-3.5">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-505 font-bold">Total locataires traités :</span>
+                  <span className="font-extrabold text-gray-900 font-mono">{syncResult.total}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-emerald-600 font-bold flex items-center gap-1.5">
+                    <CheckCircle2 size={16} /> Quittances créées :
+                  </span>
+                  <span className="font-extrabold text-emerald-700 font-mono">+{syncResult.created}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-blue-600 font-bold flex items-center gap-1.5">
+                    <RefreshCw size={16} /> Quittances mises à jour :
+                  </span>
+                  <span className="font-extrabold text-blue-700 font-mono">+{syncResult.updated}</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400 font-semibold leading-relaxed">
+                Les quittances ont été mises à jour ou générées en statut <strong className="text-emerald-600 font-black">"Payé"</strong> avec les montants corrects. Les locataires et bailleurs disposent maintenant de reçus parfaitement alignés avec vos rapports.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSyncModalOpen(false);
+                  setSyncResult(null);
+                }}
+                className="w-full py-4 bg-gray-900 hover:bg-black text-white font-black text-sm rounded-2xl transition-all shadow-md mt-6"
+              >
+                Fermer la fenêtre
+              </button>
+            </div>
           </Modal>
         )}
       </div>
