@@ -407,6 +407,85 @@ const SuperAdminDashboard: React.FC = () => {
   const [syncingReceipts, setSyncingReceipts] = useState(false);
   const [syncResult, setSyncResult] = useState<{ updated: number; created: number; total: number } | null>(null);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncSetupOpen, setSyncSetupOpen] = useState(false);
+  const [syncScope, setSyncScope] = useState<'filtered' | 'current' | 'allYear'>('current');
+  const [syncBailleurScope, setSyncBailleurScope] = useState<'all' | 'selected'>('all');
+
+  // Compute target payments matching the selected sync scope
+  const targetPaymentsToSync = React.useMemo(() => {
+    const list: any[] = [];
+    
+    reports.forEach(report => {
+      const reportMonth = report.mois || '';
+      const parts = reportMonth.split(' ');
+      if (parts.length < 2) return;
+      const rMName = parts[0];
+      const rYStr = parts[1];
+      
+      // Determine if month matches selected scope
+      let isMonthMatch = false;
+      if (syncScope === 'filtered') {
+        isMonthMatch = suiviMonths.some(m => 
+          reportMonth.toLowerCase().trim() === `${m} ${suiviYear}`.toLowerCase().trim()
+        );
+      } else if (syncScope === 'current') {
+        const curMonthName = months[new Date().getMonth()];
+        const curYear = new Date().getFullYear().toString();
+        isMonthMatch = reportMonth.toLowerCase().trim() === `${curMonthName} ${curYear}`.toLowerCase().trim();
+      } else if (syncScope === 'allYear') {
+        isMonthMatch = rYStr === suiviYear;
+      }
+      
+      if (!isMonthMatch) return;
+      
+      // Determine if bailleur matches selected scope
+      let isBailleurMatch = false;
+      if (syncBailleurScope === 'all') {
+        isBailleurMatch = true;
+      } else {
+        isBailleurMatch = suiviBailleur !== 'all' ? report.chez === suiviBailleur : true;
+      }
+      
+      if (!isBailleurMatch) return;
+      
+      (report.items || []).forEach((item: any, idx: number) => {
+        const first = item.prenoms || '';
+        const last = item.nom || '';
+        const fullName = `${first} ${last}`.trim();
+        
+        const rent = getSafeNum(item.loyer);
+        const paid = getSafeNum(item.paye);
+        const unpaid = getSafeNum(item.nonPaye) > 0 ? getSafeNum(item.nonPaye) : Math.max(0, rent - paid);
+        
+        let status: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+        if (paid >= rent && rent > 0) {
+          status = 'paid';
+        } else if (paid > 0 && paid < rent) {
+          status = 'partial';
+        } else {
+          status = 'unpaid';
+        }
+        
+        list.push({
+          reportId: report.id,
+          itemIndex: idx,
+          prenoms: item.prenoms || '',
+          nom: item.nom || '',
+          fullName,
+          bailleurName: report.chez,
+          mois: report.mois,
+          loyer: rent,
+          paye: paid,
+          nonPaye: unpaid,
+          status,
+          currency: report.reportCurrency || ' FCFA',
+          villaNumber: report.villaNumber || item.villaNumber || item.villa || ''
+        });
+      });
+    });
+    
+    return list;
+  }, [reports, syncScope, syncBailleurScope, suiviMonths, suiviYear, suiviBailleur]);
 
   // Helper to determine if a receipt matches a target month/year
   const isReceiptMatchingMonth = (r: any, targetMois: string) => {
@@ -420,22 +499,35 @@ const SuperAdminDashboard: React.FC = () => {
 
     if (isNaN(targetMonthIndex) || isNaN(targetYear)) return false;
 
-    if (r.periodStart) {
-      const d = new Date(r.periodStart);
-      if (d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex) {
-        return true;
+    // Timezone-safe date matching via string split analysis
+    if (r.periodStart && typeof r.periodStart === 'string') {
+      const parts = r.periodStart.split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]) - 1;
+        if (y === targetYear && m === targetMonthIndex) {
+          return true;
+        }
       }
     }
-    if (r.date) {
-      const d = new Date(r.date);
-      if (d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex) {
-        return true;
+    if (r.date && typeof r.date === 'string') {
+      const parts = r.date.split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]) - 1;
+        if (y === targetYear && m === targetMonthIndex) {
+          return true;
+        }
       }
     }
-    if (r.createdAt) {
-      const d = new Date(r.createdAt);
-      if (d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex) {
-        return true;
+    if (r.createdAt && typeof r.createdAt === 'string') {
+      const parts = r.createdAt.split('T')[0].split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]) - 1;
+        if (y === targetYear && m === targetMonthIndex) {
+          return true;
+        }
       }
     }
     if (r.periodLabel) {
@@ -448,18 +540,13 @@ const SuperAdminDashboard: React.FC = () => {
   };
 
   const handleSyncReceipts = async () => {
-    if (accumulatedPayments.length === 0) {
-      alert("Aucun paiement trouvé pour les mois et bailleurs sélectionnés.");
+    const activePayments = targetPaymentsToSync.filter(p => p.paye > 0);
+    if (activePayments.length === 0) {
+      alert("Aucun règlement (paiement enregistré > 0) trouvé pour le périmètre de synchronisation sélectionné.");
       return;
     }
 
-    const confirmSync = window.confirm(
-      `Voulez-vous synchroniser et mettre à jour les quittances pour les ${accumulatedPayments.length} locataires de la sélection ?\n\n` +
-      `- Les quittances existantes dont le montant diffère du paiement seront mises à jour.\n` +
-      `- Les quittances manquantes pour les locataires ayant payé seront créées.`
-    );
-    if (!confirmSync) return;
-
+    setSyncSetupOpen(false);
     setSyncingReceipts(true);
     let created = 0;
     let updated = 0;
@@ -476,8 +563,7 @@ const SuperAdminDashboard: React.FC = () => {
       const currentReceipts = receiptsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
       setReceipts(currentReceipts);
 
-      for (const p of accumulatedPayments) {
-        if (p.paye <= 0) continue;
+      for (const p of activePayments) {
         total++;
 
         // Find match in currentReceipts
@@ -492,11 +578,15 @@ const SuperAdminDashboard: React.FC = () => {
         const [mName, yStr] = p.mois.split(' ');
         const mIndex = monthsMap[mName.toLowerCase().trim()] !== undefined ? monthsMap[mName.toLowerCase().trim()] : 0;
         const yearNum = parseInt(yStr) || new Date().getFullYear();
-        const start = new Date(yearNum, mIndex, 1).toISOString().split('T')[0];
-        const end = new Date(yearNum, mIndex + 1, 0).toISOString().split('T')[0];
+        
+        // Timezone-safe ISO calendar date strings
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const start = `${yearNum}-${pad(mIndex + 1)}-01`;
+        const endDay = new Date(yearNum, mIndex + 1, 0).getDate();
+        const end = `${yearNum}-${pad(mIndex + 1)}-${pad(endDay)}`;
 
         if (matchingReceipt) {
-          // If amount is different, update
+          // If amount is different or not Paid, update
           if (getSafeNum(matchingReceipt.amount) !== p.paye || matchingReceipt.status !== 'Payé') {
             const rRef = doc(db, 'receipts', matchingReceipt.id);
             await updateDoc(rRef, {
@@ -1284,8 +1374,8 @@ const SuperAdminDashboard: React.FC = () => {
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       <button
-                        onClick={handleSyncReceipts}
-                        disabled={syncingReceipts || accumulatedPayments.length === 0}
+                        onClick={() => setSyncSetupOpen(true)}
+                        disabled={syncingReceipts || reports.length === 0}
                         className={`bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-extrabold text-xs px-4 py-3 rounded-2xl transition-all shadow-sm flex items-center gap-2 ${syncingReceipts ? 'opacity-75 cursor-not-allowed' : ''}`}
                       >
                         <Receipt size={14} className={syncingReceipts ? 'animate-spin' : ''} />
@@ -1629,6 +1719,194 @@ const SuperAdminDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </Modal>
+        )}
+
+        {syncSetupOpen && (
+          <Modal
+            isOpen={syncSetupOpen}
+            onClose={() => setSyncSetupOpen(false)}
+            title="Automatisation & Synchronisation"
+          >
+            <div className="space-y-6 font-sans">
+              <div className="bg-indigo-50/50 p-4 rounded-3xl border border-indigo-100 flex gap-4 items-start">
+                <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl shrink-0">
+                  <Receipt size={24} />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-sm text-indigo-950">Génération automatique des Quittances</h4>
+                  <p className="text-xs text-indigo-700 font-medium leading-relaxed">
+                    Ce module synchronise les règlements d'honoraires et crée/met à jour automatiquement les quittances correspondantes au statut <strong className="font-black text-emerald-600">"Payé"</strong>.
+                  </p>
+                </div>
+              </div>
+
+              {/* 1. PERIOD SELECTION */}
+              <div className="space-y-3">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-wider block">
+                  1. Période à synchroniser
+                </label>
+                <div className="grid grid-cols-1 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setSyncScope('current')}
+                    className={`p-4 rounded-2xl border text-left flex items-start gap-3 transition-all ${
+                      syncScope === 'current'
+                        ? 'bg-blue-50/50 border-blue-900 ring-2 ring-blue-900/10'
+                        : 'bg-white hover:bg-gray-50 border-gray-100'
+                    }`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        syncScope === 'current' ? 'border-blue-900' : 'border-gray-300'
+                      }`}>
+                        {syncScope === 'current' && <div className="w-2 h-2 rounded-full bg-blue-900" />}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="font-extrabold text-sm text-gray-950 block">Mois en cours uniquement</span>
+                      <span className="text-xs text-gray-500 font-semibold">
+                        Génère pour le mois de {months[new Date().getMonth()]} {new Date().getFullYear()}
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSyncScope('filtered')}
+                    className={`p-4 rounded-2xl border text-left flex items-start gap-3 transition-all ${
+                      syncScope === 'filtered'
+                        ? 'bg-blue-50/50 border-blue-900 ring-2 ring-blue-900/10'
+                        : 'bg-white hover:bg-gray-50 border-gray-100'
+                    }`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        syncScope === 'filtered' ? 'border-blue-900' : 'border-gray-300'
+                      }`}>
+                        {syncScope === 'filtered' && <div className="w-2 h-2 rounded-full bg-blue-900" />}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="font-extrabold text-sm text-gray-950 block">Mois sélectionnés dans le filtre</span>
+                      <span className="text-xs text-gray-500 font-semibold leading-relaxed">
+                        Filtre actif : {suiviMonths.join(', ')} {suiviYear}
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSyncScope('allYear')}
+                    className={`p-4 rounded-2xl border text-left flex items-start gap-3 transition-all ${
+                      syncScope === 'allYear'
+                        ? 'bg-blue-50/50 border-blue-900 ring-2 ring-blue-900/10'
+                        : 'bg-white hover:bg-gray-50 border-gray-100'
+                    }`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        syncScope === 'allYear' ? 'border-blue-900' : 'border-gray-300'
+                      }`}>
+                        {syncScope === 'allYear' && <div className="w-2 h-2 rounded-full bg-blue-900" />}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="font-extrabold text-sm text-gray-950 block">Tous les mois à jour (Année {suiviYear})</span>
+                      <span className="text-xs text-gray-500 font-semibold">
+                        Parcourir et synchroniser tous les rapports de l'année {suiviYear}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. BAILLEUR SELECTION */}
+              <div className="space-y-3">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-wider block">
+                  2. Bailleurs concernés
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setSyncBailleurScope('all')}
+                    className={`p-4 rounded-2xl border text-left flex items-start gap-3 transition-all ${
+                      syncBailleurScope === 'all'
+                        ? 'bg-blue-50/50 border-blue-900 ring-2 ring-blue-900/10'
+                        : 'bg-white hover:bg-gray-50 border-gray-100'
+                    }`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        syncBailleurScope === 'all' ? 'border-blue-900' : 'border-gray-300'
+                      }`}>
+                        {syncBailleurScope === 'all' && <div className="w-2 h-2 rounded-full bg-blue-900" />}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="font-extrabold text-sm text-gray-950 block">Tous</span>
+                      <span className="text-[10px] text-gray-500 font-bold">Tous les bailleurs</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={suiviBailleur === 'all'}
+                    onClick={() => setSyncBailleurScope('selected')}
+                    className={`p-4 rounded-2xl border text-left flex items-start gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      syncBailleurScope === 'selected'
+                        ? 'bg-blue-50/50 border-blue-900 ring-2 ring-blue-900/10'
+                        : 'bg-white hover:bg-gray-50 border-gray-100'
+                    }`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        syncBailleurScope === 'selected' ? 'border-blue-900' : 'border-gray-300'
+                      }`}>
+                        {syncBailleurScope === 'selected' && <div className="w-2 h-2 rounded-full bg-blue-900" />}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="font-extrabold text-sm text-gray-950 block truncate">Filtre actif</span>
+                      <span className="text-[10px] text-gray-500 font-bold block truncate" title={suiviBailleur}>
+                        {suiviBailleur === 'all' ? 'Aucun sélectionné' : suiviBailleur}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* DYNAMIC ANALYSIS BOX */}
+              <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-1 text-center">
+                <div className="text-xs text-gray-400 font-extrabold uppercase">Estimation de la synchronisation</div>
+                <div className="text-2xl font-black text-gray-950 font-mono">
+                  {targetPaymentsToSync.filter(p => p.paye > 0).length} <span className="text-xs text-gray-400 font-extrabold font-sans">règlements enregistrés</span>
+                </div>
+                <p className="text-[10px] text-gray-400 font-bold">
+                  Sera analysé et injecté sous forme de quittances au statut "Payé".
+                </p>
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setSyncSetupOpen(false)}
+                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all text-xs"
+                >
+                  Fermer
+                </button>
+                <button
+                  type="button"
+                  disabled={syncingReceipts || targetPaymentsToSync.filter(p => p.paye > 0).length === 0}
+                  onClick={handleSyncReceipts}
+                  className="px-6 py-3 bg-indigo-600 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex items-center gap-2 text-xs"
+                >
+                  <RefreshCw size={14} className={syncingReceipts ? 'animate-spin' : ''} />
+                  Lancer la synchronisation
+                </button>
+              </div>
+            </div>
           </Modal>
         )}
 
