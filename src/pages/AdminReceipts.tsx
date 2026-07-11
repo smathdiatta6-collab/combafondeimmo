@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { Receipt, Trash2, Plus, ArrowLeft, Printer, Download, Edit2, Copy, Search, CreditCard, X } from 'lucide-react';
+import { Receipt, Trash2, Plus, ArrowLeft, Printer, Download, Edit2, Copy, Search, CreditCard, X, Building, Layers, List } from 'lucide-react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { generateReceiptPDF } from '../utils/pdfGenerator';
 import { numberToWordsFrench } from '../utils/numberToWords';
@@ -143,6 +143,7 @@ const AdminReceipts: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterYear, setFilterYear] = useState('');
+  const [groupByBailleur, setGroupByBailleur] = useState<boolean>(true);
 
   const [contractsLoaded, setContractsLoaded] = useState(false);
   const [reportToProcess, setReportToProcess] = useState<any>(null);
@@ -500,6 +501,18 @@ const AdminReceipts: React.FC = () => {
       date.toLowerCase().includes(searchLower)
     );
   });
+
+  const receiptsGroupedByBailleur = React.useMemo<{ [bailleur: string]: any[] }>(() => {
+    const groups: { [bailleur: string]: any[] } = {};
+    filteredReceipts.forEach(receipt => {
+      const b = (receipt.bailleurName || '').trim() || 'Bailleur non spécifié';
+      if (!groups[b]) {
+        groups[b] = [];
+      }
+      groups[b].push(receipt);
+    });
+    return groups;
+  }, [filteredReceipts]);
 
   const handleRemoveDuplicates = async () => {
     if (!window.confirm('Voulez-vous vraiment supprimer les quittances en double (même client, même montant, même période) ?')) return;
@@ -871,6 +884,40 @@ const AdminReceipts: React.FC = () => {
                   <X size={24} />
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Grouping Toggle Selector */}
+          <div className="flex flex-wrap items-center justify-between gap-4 max-w-5xl mx-auto bg-white p-4 rounded-2xl border border-gray-150 shadow-sm mt-4">
+            <p className="text-xs font-black text-gray-500 uppercase tracking-widest font-mono flex items-center gap-2">
+              <Building size={14} className="text-blue-900" />
+              Organisation de l'affichage :
+            </p>
+            <div className="flex bg-gray-100 p-1 rounded-xl gap-1 items-center border border-gray-200">
+              <button
+                type="button"
+                onClick={() => setGroupByBailleur(true)}
+                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-lg transition-all ${
+                  groupByBailleur
+                    ? 'bg-blue-900 text-white shadow'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                }`}
+              >
+                <Layers size={14} />
+                Regrouper par bailleur
+              </button>
+              <button
+                type="button"
+                onClick={() => setGroupByBailleur(false)}
+                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-lg transition-all ${
+                  !groupByBailleur
+                    ? 'bg-blue-900 text-white shadow'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                }`}
+              >
+                <List size={14} />
+                Liste continue (À plat)
+              </button>
             </div>
           </div>
         </div>
@@ -1280,113 +1327,243 @@ const AdminReceipts: React.FC = () => {
           </form>
         </Modal>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredReceipts.map((receipt) => (
-            <div key={receipt.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between group hover:shadow-xl transition-all">
-              <div>
-                <div className="flex justify-between items-start mb-6">
-                  <div className="w-14 h-14 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center">
-                    <Receipt size={28} />
+        {groupByBailleur ? (
+          <div className="space-y-12">
+            {(Object.entries(receiptsGroupedByBailleur) as [string, any[]][]).map(([bailleur, groupedList]) => (
+              <div key={bailleur} className="space-y-6">
+                <div className="flex items-center gap-3 border-b border-gray-200 pb-3 mt-6">
+                  <div className="w-10 h-10 bg-blue-50 text-blue-900 rounded-xl flex items-center justify-center">
+                    <Building size={20} />
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleDuplicate(receipt)}
-                      className="text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Dupliquer la quittance"
-                    >
-                      <Copy size={20} />
-                    </button>
-                    <button
-                      onClick={() => handleEditClick(receipt)}
-                      className="text-gray-400 hover:text-orange-600 transition-colors"
-                      title="Modifier la quittance"
-                    >
-                      <Edit2 size={20} />
-                    </button>
-                    <button
-                      onClick={() => handleDownloadPDF(receipt)}
-                      className="text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Télécharger PDF"
-                    >
-                      <Download size={20} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteReceipt(receipt.id)}
-                      className="text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-1">{receipt.clientName}</h3>
-                {receipt.bailleurName && (
-                  <div className="text-blue-600 font-bold text-xs mb-3 flex items-center gap-1 uppercase">
-                    <Logo className="h-3 w-auto opacity-70" /> {receipt.bailleurName}
-                  </div>
-                )}
-                <div className="flex justify-between items-center mb-4">
-                  <p className="text-green-600 font-bold text-lg">{formatAmount((receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0))} FCFA</p>
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
-                    receipt.status === 'Payé' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                  }`}>
-                    {receipt.status || 'Payé'}
-                  </span>
-                </div>
-                
-                <div className="space-y-1 text-sm text-gray-500 border-t border-gray-100 pt-3 mt-3">
-                  <div className="flex justify-between">
-                    <span>Loyer :</span>
-                    <span className="font-semibold text-gray-700">{formatAmount(receipt.amount || 0)} FCFA</span>
-                  </div>
-                  {(receipt.prestations || 0) > 0 && (
-                    <div className="flex justify-between">
-                      <span>Prestations :</span>
-                      <span className="font-semibold text-gray-700">{formatAmount(receipt.prestations)} FCFA</span>
-                    </div>
-                  )}
-                  {(receipt.timbre || 0) > 0 && (
-                    <div className="flex justify-between">
-                      <span>Timbre :</span>
-                      <span className="font-semibold text-gray-700">{formatAmount(receipt.timbre)} FCFA</span>
-                    </div>
-                  )}
-                  {(receipt.caution || 0) > 0 && (
-                    <div className="flex justify-between text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                      <span className="font-bold">{receipt.cautionLabel || 'Caution'} :</span>
-                      <span className="font-bold">{formatAmount(receipt.caution)} FCFA</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-1 font-bold text-gray-800">
-                    <span>Total :</span>
-                    <span>{formatAmount((receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0))} FCFA</span>
+                  <div>
+                    <h2 className="text-xl font-black text-gray-900 uppercase tracking-wide">
+                      {bailleur}
+                    </h2>
+                    <p className="text-xs text-gray-400 font-bold">
+                      {groupedList.length} quittance{groupedList.length > 1 ? 's' : ''} enregistrée{groupedList.length > 1 ? 's' : ''}
+                    </p>
                   </div>
                 </div>
 
-                <div className="space-y-2 text-sm text-gray-500 mt-4">
-                  <p className="font-bold text-blue-600">{receipt.periodLabel}</p>
-                  <p>Date: {receipt.date}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {groupedList.map((receipt) => (
+                    <div key={receipt.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between group hover:shadow-xl transition-all">
+                      <div>
+                        <div className="flex justify-between items-start mb-6">
+                          <div className="w-14 h-14 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center">
+                            <Receipt size={28} />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDuplicate(receipt)}
+                              className="text-gray-400 hover:text-blue-600 transition-colors"
+                              title="Dupliquer la quittance"
+                            >
+                              <Copy size={20} />
+                            </button>
+                            <button
+                              onClick={() => handleEditClick(receipt)}
+                              className="text-gray-400 hover:text-orange-600 transition-colors"
+                              title="Modifier la quittance"
+                            >
+                              <Edit2 size={20} />
+                            </button>
+                            <button
+                              onClick={() => handleDownloadPDF(receipt)}
+                              className="text-gray-400 hover:text-blue-600 transition-colors"
+                              title="Télécharger PDF"
+                            >
+                              <Download size={20} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteReceipt(receipt.id)}
+                              className="text-gray-400 hover:text-red-600 transition-colors"
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          </div>
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900 mb-1">{receipt.clientName}</h3>
+                        {receipt.bailleurName && (
+                          <div className="text-blue-600 font-bold text-xs mb-3 flex items-center gap-1 uppercase">
+                            <Logo className="h-3 w-auto opacity-70" /> {receipt.bailleurName}
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center mb-4">
+                          <p className="text-green-600 font-bold text-lg">{formatAmount((receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0))} FCFA</p>
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
+                            receipt.status === 'Payé' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {receipt.status || 'Payé'}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1 text-sm text-gray-500 border-t border-gray-100 pt-3 mt-3">
+                          <div className="flex justify-between">
+                            <span>Loyer :</span>
+                            <span className="font-semibold text-gray-700">{formatAmount(receipt.amount || 0)} FCFA</span>
+                          </div>
+                          {(receipt.prestations || 0) > 0 && (
+                            <div className="flex justify-between">
+                              <span>Prestations :</span>
+                              <span className="font-semibold text-gray-700">{formatAmount(receipt.prestations)} FCFA</span>
+                            </div>
+                          )}
+                          {(receipt.timbre || 0) > 0 && (
+                            <div className="flex justify-between">
+                              <span>Timbre :</span>
+                              <span className="font-semibold text-gray-700">{formatAmount(receipt.timbre)} FCFA</span>
+                            </div>
+                          )}
+                          {(receipt.caution || 0) > 0 && (
+                            <div className="flex justify-between text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                              <span className="font-bold">{receipt.cautionLabel || 'Caution'} :</span>
+                              <span className="font-bold">{formatAmount(receipt.caution)} FCFA</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-1 font-bold text-gray-800">
+                            <span>Total :</span>
+                            <span>{formatAmount((receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0))} FCFA</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 text-sm text-gray-500 mt-4">
+                          <p className="font-bold text-blue-600">{receipt.periodLabel}</p>
+                          <p>Date: {receipt.date}</p>
+                        </div>
+                      </div>
+                      <div className="mt-6 pt-6 border-t border-gray-50 flex flex-col gap-3">
+                        {receipt.status === 'En attente' ? (
+                          <button
+                            onClick={() => handlePayReceipt(receipt)}
+                            className="w-full bg-green-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-green-700 transition-all"
+                          >
+                            <CreditCard size={18} /> Payer (Espèces)
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleDownloadPDF(receipt)}
+                            className="w-full text-blue-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
+                          >
+                            Télécharger PDF <Download size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div className="mt-6 pt-6 border-t border-gray-50 flex flex-col gap-3">
-                {receipt.status === 'En attente' ? (
-                  <button
-                    onClick={() => handlePayReceipt(receipt)}
-                    className="w-full bg-green-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-green-700 transition-all"
-                  >
-                    <CreditCard size={18} /> Payer (Espèces)
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleDownloadPDF(receipt)}
-                    className="w-full text-blue-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
-                  >
-                    Télécharger PDF <Download size={16} />
-                  </button>
-                )}
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredReceipts.map((receipt) => (
+              <div key={receipt.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between group hover:shadow-xl transition-all">
+                <div>
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="w-14 h-14 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center">
+                      <Receipt size={28} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDuplicate(receipt)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Dupliquer la quittance"
+                      >
+                        <Copy size={20} />
+                      </button>
+                      <button
+                        onClick={() => handleEditClick(receipt)}
+                        className="text-gray-400 hover:text-orange-600 transition-colors"
+                        title="Modifier la quittance"
+                      >
+                        <Edit2 size={20} />
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPDF(receipt)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Télécharger PDF"
+                      >
+                        <Download size={20} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteReceipt(receipt.id)}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-1">{receipt.clientName}</h3>
+                  {receipt.bailleurName && (
+                    <div className="text-blue-600 font-bold text-xs mb-3 flex items-center gap-1 uppercase">
+                      <Logo className="h-3 w-auto opacity-70" /> {receipt.bailleurName}
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center mb-4">
+                    <p className="text-green-600 font-bold text-lg">{formatAmount((receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0))} FCFA</p>
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
+                      receipt.status === 'Payé' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {receipt.status || 'Payé'}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-1 text-sm text-gray-500 border-t border-gray-100 pt-3 mt-3">
+                    <div className="flex justify-between">
+                      <span>Loyer :</span>
+                      <span className="font-semibold text-gray-700">{formatAmount(receipt.amount || 0)} FCFA</span>
+                    </div>
+                    {(receipt.prestations || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span>Prestations :</span>
+                        <span className="font-semibold text-gray-700">{formatAmount(receipt.prestations)} FCFA</span>
+                      </div>
+                    )}
+                    {(receipt.timbre || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span>Timbre :</span>
+                        <span className="font-semibold text-gray-700">{formatAmount(receipt.timbre)} FCFA</span>
+                      </div>
+                    )}
+                    {(receipt.caution || 0) > 0 && (
+                      <div className="flex justify-between text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                        <span className="font-bold">{receipt.cautionLabel || 'Caution'} :</span>
+                        <span className="font-bold">{formatAmount(receipt.caution)} FCFA</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-1 font-bold text-gray-800">
+                      <span>Total :</span>
+                      <span>{formatAmount((receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0))} FCFA</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-sm text-gray-500 mt-4">
+                    <p className="font-bold text-blue-600">{receipt.periodLabel}</p>
+                    <p>Date: {receipt.date}</p>
+                  </div>
+                </div>
+                <div className="mt-6 pt-6 border-t border-gray-50 flex flex-col gap-3">
+                  {receipt.status === 'En attente' ? (
+                    <button
+                      onClick={() => handlePayReceipt(receipt)}
+                      className="w-full bg-green-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-green-700 transition-all"
+                    >
+                      <CreditCard size={18} /> Payer (Espèces)
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleDownloadPDF(receipt)}
+                      className="w-full text-blue-600 font-bold text-sm flex items-center justify-center gap-2 hover:gap-3 transition-all"
+                    >
+                      Télécharger PDF <Download size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
