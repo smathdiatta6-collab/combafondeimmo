@@ -798,6 +798,126 @@ const AdminMonthlyReports: React.FC = () => {
         updatedByName: user?.displayName || user?.email
       });
 
+      // AUTOMATION: Synchronize this specific payment with the receipts collection
+      const tenantFullName = `${originalItem.prenoms || ''} ${originalItem.nom || ''}`.trim();
+      const bailleurName = (reportToUpdate.chez || '').trim();
+      const reportMois = (reportToUpdate.mois || '').trim();
+      const villaNumber = reportToUpdate.villaNumber || originalItem.villaNumber || originalItem.villa || '';
+
+      const monthsMap: { [key: string]: number } = {
+        'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3, 'mai': 4, 'juin': 5,
+        'juillet': 6, 'août': 7, 'septembre': 8, 'octobre': 9, 'novembre': 10, 'décembre': 11
+      };
+
+      const [mName, yStr] = reportMois.split(' ');
+      const mIndex = monthsMap[mName.toLowerCase().trim()] !== undefined ? monthsMap[mName.toLowerCase().trim()] : 0;
+      const yearNum = parseInt(yStr) || new Date().getFullYear();
+      
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const start = `${yearNum}-${pad(mIndex + 1)}-01`;
+      const endDay = new Date(yearNum, mIndex + 1, 0).getDate();
+      const end = `${yearNum}-${pad(mIndex + 1)}-${pad(endDay)}`;
+
+      // Fetch latest receipts from Firestore to check if one exists
+      const receiptsSnap = await getDocs(collection(db, 'receipts'));
+      const currentReceipts = receiptsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+
+      const isReceiptMatchingMonth = (r: any, targetMois: string) => {
+        if (!r || !targetMois) return false;
+        const partsMois = targetMois.split(' ');
+        if (partsMois.length < 2) return false;
+        const targetMonthName = partsMois[0].toLowerCase().trim();
+        const targetYear = parseInt(partsMois[1]);
+        const targetMonthIndex = monthsMap[targetMonthName] !== undefined ? monthsMap[targetMonthName] : -1;
+
+        if (isNaN(targetMonthIndex) || isNaN(targetYear)) return false;
+
+        if (r.periodStart && typeof r.periodStart === 'string') {
+          const parts = r.periodStart.split('-');
+          if (parts.length === 3) {
+            const y = parseInt(parts[0]);
+            const m = parseInt(parts[1]) - 1;
+            if (y === targetYear && m === targetMonthIndex) return true;
+          }
+        }
+        if (r.createdAt && typeof r.createdAt === 'string') {
+          const parts = r.createdAt.split('T')[0].split('-');
+          if (parts.length === 3) {
+            const y = parseInt(parts[0]);
+            const m = parseInt(parts[1]) - 1;
+            if (y === targetYear && m === targetMonthIndex) return true;
+          }
+        }
+        if (r.periodLabel) {
+          const label = r.periodLabel.toLowerCase();
+          if (label.includes(mName.toLowerCase()) && label.includes(yStr)) return true;
+        }
+        return false;
+      };
+
+      const matchingReceipt = currentReceipts.find((r: any) => {
+        const clientNameMatch = r.clientName?.toLowerCase().trim() === tenantFullName.toLowerCase().trim();
+        const bailleurNameMatch = r.bailleurName?.toLowerCase().trim() === bailleurName.toLowerCase().trim();
+        if (!clientNameMatch || !bailleurNameMatch) return false;
+        return isReceiptMatchingMonth(r, reportMois);
+      });
+
+      const receiptStatus = parsedPaye >= rent ? 'Payé' : (parsedPaye > 0 ? 'Partiel' : 'En attente');
+
+      if (matchingReceipt) {
+        // Update existing receipt
+        const rRef = doc(db, 'receipts', matchingReceipt.id);
+        await updateDoc(rRef, {
+          amount: parsedPaye,
+          amountInWords: numberToWordsFrench(parsedPaye),
+          status: receiptStatus,
+          updatedAt: new Date().toISOString(),
+          updatedByName: user?.displayName || user?.email || 'Admin'
+        });
+      } else if (parsedPaye > 0) {
+        // Create new receipt if payment is greater than 0
+        const contractsSnap = await getDocs(collection(db, 'contracts'));
+        const contractsList = contractsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        const matchingContract = contractsList.find(c => 
+          c.clientName?.toLowerCase().includes((originalItem.nom || '').toLowerCase()) ||
+          (originalItem.nom || '').toLowerCase().includes(c.clientName?.toLowerCase())
+        );
+
+        await addDoc(collection(db, 'receipts'), {
+          clientName: tenantFullName,
+          bailleurName: bailleurName,
+          amount: parsedPaye,
+          amountInWords: numberToWordsFrench(parsedPaye),
+          date: new Date().toISOString().split('T')[0],
+          periodStart: start,
+          periodEnd: end,
+          periodLabel: reportMois,
+          contractId: matchingContract?.id || '',
+          paymentMethodId: 'Especes',
+          reference: '',
+          prestations: 0,
+          timbre: 0,
+          caution: 0,
+          cautionLabel: '',
+          indexInitial: 0,
+          indexFinal: 0,
+          waterCons: 0,
+          waterAmount: 0,
+          electricityCons: 0,
+          electricityAmount: 0,
+          status: receiptStatus,
+          currency: reportToUpdate.reportCurrency || ' FCFA',
+          issuePlace: 'Dakar',
+          createdAt: new Date().toISOString(),
+          createdByUID: user?.uid || '',
+          createdByName: user?.displayName || user?.email || 'Admin',
+          villaNumber: villaNumber,
+        });
+      }
+
+      // Refresh any local receipts if needed
+      fetchReceipts();
+
       // Update local state without waiting for re-fetch to feel extremely snappy!
       setReports(prev => prev.map(r => r.id === reportId ? {
         ...r,
