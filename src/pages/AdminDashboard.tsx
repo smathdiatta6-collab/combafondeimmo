@@ -10,6 +10,7 @@ const AdminDashboard: React.FC = () => {
   const { user, isAdmin, isSuperAdmin, loading, logout } = useFirebase();
   const [unreadCount, setUnreadCount] = useState(0);
   const [latestMessages, setLatestMessages] = useState<any[]>([]);
+  const [pendingReceipts, setPendingReceipts] = useState<any[]>([]);
   const [stats, setStats] = useState({
     propertiesCount: 0,
     contractsCount: 0,
@@ -52,6 +53,7 @@ const AdminDashboard: React.FC = () => {
     const unsubscribeReceipts = onSnapshot(collection(db, 'receipts'), (snapshot) => {
       let collected = 0;
       let pending = 0;
+      const pendingList: any[] = [];
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
         const amt = Number(data.amount) || 0;
@@ -59,6 +61,7 @@ const AdminDashboard: React.FC = () => {
           collected += amt;
         } else {
           pending += amt;
+          pendingList.push({ id: doc.id, ...data });
         }
       });
       setStats((prev) => ({
@@ -66,6 +69,7 @@ const AdminDashboard: React.FC = () => {
         totalCollected: collected,
         totalPending: pending,
       }));
+      setPendingReceipts(pendingList);
     }, (error) => {
       console.warn('Error loading receipts for statistics:', error);
     });
@@ -311,6 +315,60 @@ const AdminDashboard: React.FC = () => {
                     <MessageCircle size={18} />
                   </div>
                   <p className="text-xs">Aucun message reçu</p>
+                </div>
+              )}
+            </div>
+
+            {/* Widget 3: Unpaid / Pending Receipts (Locataires en attente de paiement) */}
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <div className="flex justify-between items-center mb-5">
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Clock size={16} className="text-amber-500" />
+                  Locataires impayés
+                </h3>
+                <Link to="/admin/quittances" className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-0.5">
+                  Gérer <ChevronRight size={14} />
+                </Link>
+              </div>
+
+              {pendingReceipts.length > 0 ? (
+                <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                  {pendingReceipts.map((receipt) => {
+                    const totalAmt = (receipt.amount || 0) + (receipt.prestations || 0) + (receipt.timbre || 0) + (receipt.caution || 0);
+                    return (
+                      <div 
+                        key={receipt.id} 
+                        className="p-3 bg-amber-50/50 hover:bg-amber-50 rounded-2xl transition-colors border border-amber-100/50 flex flex-col justify-between gap-1.5"
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="font-bold text-sm text-gray-900 block leading-tight truncate">
+                              {receipt.clientName}
+                            </span>
+                            {receipt.bailleurName && (
+                              <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider block mt-0.5 truncate">
+                                Bailleur: {receipt.bailleurName}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-lg shrink-0">
+                            {formatAmount(totalAmt)} F
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-gray-500 border-t border-gray-150/50 pt-1.5">
+                          <span>{receipt.periodLabel || 'Mois non spécifié'}</span>
+                          <span className="font-mono text-[10px]">{receipt.date}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400 flex flex-col items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-500">
+                    <ShieldCheck size={18} />
+                  </div>
+                  <p className="text-xs text-green-600 font-bold">Tous les locataires sont à jour !</p>
                 </div>
               )}
             </div>
