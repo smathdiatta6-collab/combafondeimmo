@@ -5,7 +5,7 @@ import { collection, getDocs, query, where, orderBy, doc, updateDoc, addDoc } fr
 import { 
   ShieldCheck, ArrowLeft, Users, Receipt, TrendingUp, Calendar, Clock, 
   CheckCircle2, AlertCircle, Building, User, ArrowRight, Search, ChevronDown, Filter, X,
-  RefreshCw, Coins, Ban
+  RefreshCw, Coins, Ban, Sparkles
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import Logo from '../components/Logo';
@@ -54,6 +54,10 @@ const SuperAdminDashboard: React.FC = () => {
   // Yearly view states
   const [suiviSubTab, setSuiviSubTab] = useState<'mensuel' | 'annuel'>('mensuel');
   const [selectedTenantHistory, setSelectedTenantHistory] = useState<string>('');
+
+  // Special automation & tracking states
+  const [suiviFocusScope, setSuiviFocusScope] = useState<'standard' | 'juneOnwards'>('standard');
+  const [autoSyncingJune, setAutoSyncingJune] = useState(false);
 
   const months = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -353,6 +357,292 @@ const SuperAdminDashboard: React.FC = () => {
     }
   };
 
+  const handleSingleTenantAutoPay = async (reportId: string, itemIndex: number) => {
+    try {
+      const reportToUpdate = reports.find(r => r.id === reportId);
+      if (!reportToUpdate) return;
+
+      const originalItem = reportToUpdate.items[itemIndex];
+      if (!originalItem) return;
+
+      const rent = getSafeNum(originalItem.loyer);
+
+      const updatedItems = [...reportToUpdate.items];
+      updatedItems[itemIndex] = {
+        ...originalItem,
+        paye: rent,
+        nonPaye: 0,
+        updatedAt: new Date().toISOString()
+      };
+      if (updatedItems[itemIndex][`_manual_nonPaye`]) {
+        delete updatedItems[itemIndex][`_manual_nonPaye`];
+      }
+
+      const calculatedReport = updateReportTotals({
+        ...reportToUpdate,
+        items: updatedItems
+      });
+
+      const total = calculatedReport.totalRemettre || 0;
+      const arreteVal = numberToWordsFrench(total) + " " + (reportToUpdate.reportCurrency || 'FCFA');
+
+      const reportRef = doc(db, 'monthlyReports', reportId);
+      await updateDoc(reportRef, {
+        items: calculatedReport.items,
+        totalPaye: calculatedReport.totalPaye,
+        totalCommission: calculatedReport.totalCommission,
+        totalRemettre: calculatedReport.totalRemettre,
+        arreteSomme: arreteVal,
+        updatedAt: new Date().toISOString(),
+        updatedByName: user?.displayName || user?.email || 'Automated Sync'
+      });
+
+      // Synchronize with receipts collection
+      const tenantFullName = `${originalItem.prenoms || ''} ${originalItem.nom || ''}`.trim();
+      const bailleurName = (reportToUpdate.chez || '').trim();
+      const reportMois = (reportToUpdate.mois || '').trim();
+      const villaNumber = reportToUpdate.villaNumber || originalItem.villaNumber || originalItem.villa || '';
+
+      const monthsMap: { [key: string]: number } = {
+        'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3, 'mai': 4, 'juin': 5,
+        'juillet': 6, 'août': 7, 'septembre': 8, 'octobre': 9, 'novembre': 10, 'décembre': 11
+      };
+
+      const [mName, yStr] = reportMois.split(' ');
+      const mIndex = monthsMap[mName.toLowerCase().trim()] !== undefined ? monthsMap[mName.toLowerCase().trim()] : 0;
+      const yearNum = parseInt(yStr) || new Date().getFullYear();
+      
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const start = `${yearNum}-${pad(mIndex + 1)}-01`;
+      const endDay = new Date(yearNum, mIndex + 1, 0).getDate();
+      const end = `${yearNum}-${pad(mIndex + 1)}-${pad(endDay)}`;
+
+      // Fetch receipts
+      const receiptsSnap = await getDocs(collection(db, 'receipts'));
+      const currentReceipts = receiptsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+
+      const matchingReceipt = currentReceipts.find((r: any) => {
+        const clientNameMatch = r.clientName?.toLowerCase().trim() === tenantFullName.toLowerCase().trim();
+        const bailleurNameMatch = r.bailleurName?.toLowerCase().trim() === bailleurName.toLowerCase().trim();
+        return clientNameMatch && bailleurNameMatch && isReceiptMatchingMonth(r, reportMois);
+      });
+
+      const receiptStatus = 'Payé';
+
+      if (matchingReceipt) {
+        const rRef = doc(db, 'receipts', matchingReceipt.id);
+        await updateDoc(rRef, {
+          amount: rent,
+          amountInWords: numberToWordsFrench(rent),
+          status: receiptStatus,
+          updatedAt: new Date().toISOString(),
+          updatedByName: user?.displayName || user?.email || 'Admin Auto'
+        });
+      } else {
+        const matchingContract = contracts.find(c => 
+          c.clientName?.toLowerCase().includes((originalItem.nom || '').toLowerCase()) ||
+          (originalItem.nom || '').toLowerCase().includes(c.clientName?.toLowerCase())
+        );
+
+        await addDoc(collection(db, 'receipts'), {
+          clientName: tenantFullName,
+          bailleurName: bailleurName,
+          amount: rent,
+          amountInWords: numberToWordsFrench(rent),
+          date: new Date().toISOString().split('T')[0],
+          periodStart: start,
+          periodEnd: end,
+          periodLabel: `un mois de ${mName.toLowerCase()}`,
+          contractId: matchingContract?.id || '',
+          paymentMethodId: 'Especes',
+          reference: '',
+          prestations: 0,
+          timbre: 0,
+          caution: 0,
+          cautionLabel: '',
+          indexInitial: 0,
+          indexFinal: 0,
+          waterCons: 0,
+          waterAmount: 0,
+          electricityCons: 0,
+          electricityAmount: 0,
+          status: receiptStatus,
+          currency: reportToUpdate.reportCurrency || ' FCFA',
+          issuePlace: 'Dakar',
+          createdAt: new Date().toISOString(),
+          createdByUID: user?.uid || '',
+          createdByName: user?.displayName || user?.email || 'Admin Auto',
+          villaNumber: villaNumber,
+        });
+      }
+
+      // Update state
+      setReports(prev => prev.map(r => r.id === reportId ? {
+        ...r,
+        items: calculatedReport.items,
+        totalPaye: calculatedReport.totalPaye,
+        totalCommission: calculatedReport.totalCommission,
+        totalRemettre: calculatedReport.totalRemettre,
+        arreteSomme: arreteVal
+      } : r));
+
+      // Refresh receipts
+      const finalReceiptsSnap = await getDocs(collection(db, 'receipts'));
+      const finalReceiptsList = finalReceiptsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setReceipts(finalReceiptsList);
+
+    } catch (e) {
+      console.error(e);
+      alert('Erreur lors du règlement automatique.');
+    }
+  };
+
+  const handleAutoSyncJuneAndOnwards = async (targetMonthName: string) => {
+    const targetMonth = `${targetMonthName} ${suiviYear}`;
+    if (!window.confirm(`Voulez-vous marquer automatiquement TOUS les locataires du mois de ${targetMonth} comme PAYÉS et générer instantanément leurs quittances de loyer ?`)) {
+      return;
+    }
+
+    setAutoSyncingJune(true);
+    try {
+      const targetReports = reports.filter(r => (r.mois || '').toLowerCase().trim() === targetMonth.toLowerCase().trim());
+      
+      let updatedCount = 0;
+
+      for (const report of targetReports) {
+        const updatedItems = [...report.items];
+        let itemsChanged = false;
+
+        report.items.forEach((item: any, idx: number) => {
+          const rent = getSafeNum(item.loyer);
+          const paid = getSafeNum(item.paye);
+          if (paid < rent) {
+            itemsChanged = true;
+            updatedCount++;
+            updatedItems[idx] = {
+              ...item,
+              paye: rent,
+              nonPaye: 0,
+              updatedAt: new Date().toISOString()
+            };
+            if (updatedItems[idx][`_manual_nonPaye`]) {
+              delete updatedItems[idx][`_manual_nonPaye`];
+            }
+          }
+        });
+
+        if (itemsChanged) {
+          const calculatedReport = updateReportTotals({
+            ...report,
+            items: updatedItems
+          });
+          const total = calculatedReport.totalRemettre || 0;
+          const arreteVal = numberToWordsFrench(total) + " " + (report.reportCurrency || 'FCFA');
+
+          const reportRef = doc(db, 'monthlyReports', report.id);
+          await updateDoc(reportRef, {
+            items: calculatedReport.items,
+            totalPaye: calculatedReport.totalPaye,
+            totalCommission: calculatedReport.totalCommission,
+            totalRemettre: calculatedReport.totalRemettre,
+            arreteSomme: arreteVal,
+            updatedAt: new Date().toISOString(),
+            updatedByName: user?.displayName || user?.email || 'Automated Sync'
+          });
+        }
+      }
+
+      await fetchData(); // Refresh reports list in state
+
+      // Now run quittance sync for all June payments
+      const activeJunePayments = targetPaymentsToSync.filter(p => p.mois.toLowerCase().trim() === targetMonth.toLowerCase().trim() && p.paye > 0);
+      
+      if (activeJunePayments.length > 0) {
+        const receiptsSnap = await getDocs(collection(db, 'receipts'));
+        const currentReceipts = receiptsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+
+        const monthsMap: { [key: string]: number } = {
+          'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3, 'mai': 4, 'juin': 5,
+          'juillet': 6, 'août': 7, 'septembre': 8, 'octobre': 9, 'novembre': 10, 'décembre': 11
+        };
+
+        for (const p of activeJunePayments) {
+          const matchingReceipt = currentReceipts.find((r: any) => {
+            const clientNameMatch = r.clientName?.toLowerCase().trim() === p.fullName.toLowerCase().trim();
+            const bailleurNameMatch = r.bailleurName?.toLowerCase().trim() === p.bailleurName.toLowerCase().trim();
+            return clientNameMatch && bailleurNameMatch && isReceiptMatchingMonth(r, p.mois);
+          });
+
+          const [mName, yStr] = p.mois.split(' ');
+          const mIndex = monthsMap[mName.toLowerCase().trim()] !== undefined ? monthsMap[mName.toLowerCase().trim()] : 0;
+          const yearNum = parseInt(yStr) || new Date().getFullYear();
+          
+          const pad = (n: number) => String(n).padStart(2, '0');
+          const start = `${yearNum}-${pad(mIndex + 1)}-01`;
+          const endDay = new Date(yearNum, mIndex + 1, 0).getDate();
+          const end = `${yearNum}-${pad(mIndex + 1)}-${pad(endDay)}`;
+
+          if (matchingReceipt) {
+            if (getSafeNum(matchingReceipt.amount) !== p.paye || matchingReceipt.status !== 'Payé') {
+              const rRef = doc(db, 'receipts', matchingReceipt.id);
+              await updateDoc(rRef, {
+                amount: p.paye,
+                amountInWords: numberToWordsFrench(p.paye),
+                status: 'Payé',
+                updatedAt: new Date().toISOString(),
+                updatedByName: 'Auto-Automation Juin'
+              });
+            }
+          } else {
+            const matchingContract = contracts.find(c => 
+              c.clientName?.toLowerCase().includes(p.nom.toLowerCase()) ||
+              p.nom.toLowerCase().includes(c.clientName?.toLowerCase())
+            );
+
+            await addDoc(collection(db, 'receipts'), {
+              clientName: p.fullName,
+              bailleurName: p.bailleurName,
+              amount: p.paye,
+              amountInWords: numberToWordsFrench(p.paye),
+              date: new Date().toISOString().split('T')[0],
+              periodStart: start,
+              periodEnd: end,
+              periodLabel: `un mois de ${mName.toLowerCase()}`,
+              contractId: matchingContract?.id || '',
+              paymentMethodId: 'Especes',
+              reference: '',
+              prestations: 0,
+              timbre: 0,
+              caution: 0,
+              cautionLabel: '',
+              indexInitial: 0,
+              indexFinal: 0,
+              waterCons: 0,
+              waterAmount: 0,
+              electricityCons: 0,
+              electricityAmount: 0,
+              status: 'Payé',
+              currency: p.currency || ' FCFA',
+              issuePlace: 'Dakar',
+              createdAt: new Date().toISOString(),
+              createdByUID: user?.uid || '',
+              createdByName: user?.displayName || user?.email || 'Admin Auto',
+              villaNumber: p.villaNumber || ''
+            });
+          }
+        }
+      }
+
+      alert(`Succès ! Tous les locataires de ${targetMonth} ont été marqués comme payés et leurs quittances de loyer ont été générées et enregistrées.`);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      alert("Erreur de synchronisation globale");
+    } finally {
+      setAutoSyncingJune(false);
+    }
+  };
+
   // Accumulate all tenant payment items matching our filters
   const accumulatedPayments = React.useMemo(() => {
     const list: any[] = [];
@@ -515,6 +805,90 @@ const SuperAdminDashboard: React.FC = () => {
     });
     return groups;
   }, [accumulatedPayments]);
+
+  // Compute payments starting specifically from June and onwards for the current suiviYear
+  const juneAndOnwardsPayments = React.useMemo(() => {
+    const list: any[] = [];
+    const monthsLower = months.map(m => m.toLowerCase());
+    const juneIndex = monthsLower.indexOf('juin'); // index 5
+
+    reports.forEach(report => {
+      const reportMonth = report.mois || '';
+      const reportParts = reportMonth.split(' ');
+      if (reportParts.length >= 2) {
+        const rMName = reportParts[0].toLowerCase().trim();
+        const rYear = parseInt(reportParts[1]);
+        const rMIndex = monthsLower.indexOf(rMName);
+        const sYear = parseInt(suiviYear);
+
+        if (!isNaN(rYear) && rMIndex !== -1 && !isNaN(sYear)) {
+          let isJuneOrOnwards = false;
+          if (rYear > sYear) {
+            isJuneOrOnwards = true;
+          } else if (rYear === sYear && rMIndex >= juneIndex) {
+            isJuneOrOnwards = true;
+          }
+
+          if (isJuneOrOnwards) {
+            (report.items || []).forEach((item: any, idx: number) => {
+              const first = item.prenoms || '';
+              const last = item.nom || '';
+              const fullName = `${first} ${last}`.trim();
+              
+              const rent = getSafeNum(item.loyer);
+              const paid = getSafeNum(item.paye);
+              const unpaid = getSafeNum(item.nonPaye) > 0 ? getSafeNum(item.nonPaye) : Math.max(0, rent - paid);
+              
+              let status: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+              if (paid >= rent && rent > 0) {
+                status = 'paid';
+              } else if (paid > 0 && paid < rent) {
+                status = 'partial';
+              } else {
+                status = 'unpaid';
+              }
+
+              list.push({
+                reportId: report.id,
+                itemIndex: idx,
+                prenoms: item.prenoms || '',
+                nom: item.nom || '',
+                fullName,
+                bailleurName: report.chez,
+                mois: report.mois,
+                loyer: rent,
+                paye: paid,
+                nonPaye: unpaid,
+                status,
+                currency: report.reportCurrency || ' FCFA',
+                villaNumber: report.villaNumber || item.villaNumber || item.villa || ''
+              });
+            });
+          }
+        }
+      }
+    });
+
+    return list;
+  }, [reports, suiviYear]);
+
+  // Group June & Onwards unpaid payments by bailleur for the dedicated tracker view
+  const juneAndOnwardsUnpaidByBailleur = React.useMemo(() => {
+    const groups: { [bailleur: string]: { items: any[]; totalUnpaid: number } } = {};
+    
+    juneAndOnwardsPayments.forEach(p => {
+      if (p.status === 'unpaid' || p.status === 'partial') {
+        const b = p.bailleurName || 'Bailleur non spécifié';
+        if (!groups[b]) {
+          groups[b] = { items: [], totalUnpaid: 0 };
+        }
+        groups[b].items.push(p);
+        groups[b].totalUnpaid += p.nonPaye;
+      }
+    });
+    
+    return groups;
+  }, [juneAndOnwardsPayments]);
 
   // Syncing quittances states
   const [syncingReceipts, setSyncingReceipts] = useState(false);
@@ -1188,7 +1562,240 @@ const SuperAdminDashboard: React.FC = () => {
 
             {suiviSubTab === 'mensuel' ? (
               <>
-                {/* 1. FILTERS & CONTROLS FOR SUIVI MENSUEL */}
+                {/* Mode Selector for Mensuel */}
+                <div className="flex bg-indigo-50/50 border border-indigo-100 p-1.5 rounded-2xl max-w-xl gap-1.5 items-center">
+                  <span className="text-xs font-black text-indigo-950 px-3 uppercase tracking-wider font-mono">Périmètre :</span>
+                  <button
+                    onClick={() => setSuiviFocusScope('standard')}
+                    type="button"
+                    className={`flex-1 py-2 px-3 text-center font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 ${
+                      suiviFocusScope === 'standard'
+                        ? 'bg-blue-950 text-white shadow-sm font-black'
+                        : 'text-indigo-750 hover:text-indigo-950 hover:bg-white/40'
+                    }`}
+                  >
+                    🔍 Vue Générale Filtrée
+                  </button>
+                  <button
+                    onClick={() => setSuiviFocusScope('juneOnwards')}
+                    type="button"
+                    className={`flex-1 py-2 px-3 text-center font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 relative overflow-hidden ${
+                      suiviFocusScope === 'juneOnwards'
+                        ? 'bg-indigo-600 text-white shadow-sm font-black bg-gradient-to-r from-indigo-700 to-indigo-900'
+                        : 'text-indigo-750 hover:text-indigo-950 hover:bg-white/40'
+                    }`}
+                  >
+                    <Sparkles size={14} className="text-amber-300 animate-bounce" />
+                    ⚡ Solution Juin & Suivants
+                  </button>
+                </div>
+
+                {suiviFocusScope === 'juneOnwards' ? (
+                  <div className="space-y-8 animate-fade-in" id="june-onwards-container">
+                    {/* AUTOMATION HEADER CARD */}
+                    <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white p-8 rounded-[2.5rem] shadow-xl border border-indigo-950 flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden" id="automation-header">
+                      <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 opacity-10 blur-md pointer-events-none">
+                        <Sparkles size={250} />
+                      </div>
+                      
+                      <div className="space-y-3 max-w-2xl relative z-10">
+                        <span className="bg-indigo-500/30 text-indigo-300 font-black text-[10px] px-3.5 py-1.5 rounded-full uppercase tracking-wider font-mono border border-indigo-500/20">
+                          ⚡ Solution Spéciale d'Automatisation
+                        </span>
+                        <h3 className="text-2xl font-black font-sans tracking-tight">
+                          Contrôle Rapide & Clôture de Juin et Mois Suivants
+                        </h3>
+                        <p className="text-xs text-indigo-200/90 leading-relaxed font-semibold">
+                          Tous les paiements enregistrés ci-dessous génèrent automatiquement une quittance de loyer synchronisée et marquée comme <span className="text-white font-extrabold underline">Payé</span>. Utilisez la clôture rapide ou le règlement express en 1-clic pour automatiser votre gestion.
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10 flex flex-col items-center sm:items-start gap-4">
+                        <div className="text-center sm:text-left">
+                          <p className="text-[10px] text-indigo-300 uppercase font-black tracking-widest font-mono">Clôture Directe de Juin</p>
+                          <p className="text-xs text-gray-300 mt-1 font-semibold">Marquer tous les restants de Juin comme payés</p>
+                        </div>
+                        <button
+                          type="button"
+                          id="btn-cloture-june"
+                          onClick={() => handleAutoSyncJuneAndOnwards("Juin")}
+                          disabled={autoSyncingJune}
+                          className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs px-5 py-3.5 rounded-2xl transition-all shadow-md flex items-center justify-center gap-2"
+                        >
+                          <Sparkles size={16} className={autoSyncingJune ? "animate-spin" : "animate-bounce"} />
+                          {autoSyncingJune ? "Automatisation en cours..." : "🚀 Tout Clôturer pour Juin"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* STATUS SUMMARY CARDS */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="status-summary-cards">
+                      <div className="bg-white p-6 rounded-[2rem] border border-gray-150 shadow-sm flex items-center justify-between" id="card-unpaid-count">
+                        <div className="space-y-1">
+                          <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Locataires en Retard</p>
+                          <p className="text-3xl font-black text-red-600">
+                            {(Object.values(juneAndOnwardsUnpaidByBailleur) as any[]).reduce((sum, data) => sum + data.items.length, 0)}
+                          </p>
+                          <p className="text-[10px] text-gray-400 font-bold">Pour Juin et les mois suivants</p>
+                        </div>
+                        <div className="w-12 h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center">
+                          <AlertCircle size={24} />
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-6 rounded-[2rem] border border-gray-150 shadow-sm flex items-center justify-between" id="card-unpaid-amount">
+                        <div className="space-y-1">
+                          <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Total Impayé (Dette)</p>
+                          <p className="text-2xl font-black text-gray-900">
+                            {formatAmount((Object.values(juneAndOnwardsUnpaidByBailleur) as any[]).reduce((sum, data) => sum + data.totalUnpaid, 0))} <span className="text-xs text-gray-400 font-bold">FCFA</span>
+                          </p>
+                          <p className="text-[10px] text-gray-400 font-bold">À recouvrer pour Juin & suivants</p>
+                        </div>
+                        <div className="w-12 h-12 bg-gray-100 text-gray-500 rounded-2xl flex items-center justify-center">
+                          <Building size={24} />
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-6 rounded-[2rem] border border-gray-150 shadow-sm flex items-center justify-between" id="card-paid-count">
+                        <div className="space-y-1">
+                          <p className="text-xs text-gray-400 uppercase font-bold tracking-wider font-sans text-emerald-800">Locataires à Jour (Juin+)</p>
+                          <p className="text-3xl font-black text-emerald-600">
+                            {juneAndOnwardsPayments.filter(p => p.status === 'paid').length}
+                          </p>
+                          <p className="text-[10px] text-emerald-500 font-bold">Quittances générées avec succès</p>
+                        </div>
+                        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
+                          <CheckCircle2 size={24} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* DEDICATED TRACKER LIST GROUPED BY BAILLEUR */}
+                    <div className="space-y-6" id="dedicated-tracker-list">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-lg font-black text-gray-900 font-sans flex items-center gap-2">
+                          <AlertCircle className="text-indigo-600 animate-pulse" size={20} />
+                          État des Impayés par Bailleur (Juin & Mois Suivants)
+                        </h4>
+                        <span className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-xl font-bold font-mono">
+                          {Object.keys(juneAndOnwardsUnpaidByBailleur).length} Bailleurs concernés
+                        </span>
+                      </div>
+
+                      {Object.keys(juneAndOnwardsUnpaidByBailleur).length === 0 ? (
+                        <div className="py-16 text-center text-emerald-600 bg-emerald-50/40 rounded-3xl flex flex-col items-center justify-center gap-3 border border-emerald-100 shadow-inner" id="no-unpaid-box">
+                          <CheckCircle2 size={48} className="text-emerald-500 animate-bounce" />
+                          <div>
+                            <p className="font-extrabold text-base">Félicitations ! Aucun impayé trouvé.</p>
+                            <p className="text-xs text-emerald-600/80 mt-1">Tous les locataires sont parfaitement à jour pour Juin et les mois suivants.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-6" id="unpaid-bailleurs-grid">
+                          {Object.entries(juneAndOnwardsUnpaidByBailleur).map(([bailleur, data]: [string, any]) => (
+                            <div key={bailleur} className="border border-indigo-100 rounded-[2.5rem] overflow-hidden bg-white shadow-sm flex flex-col hover:border-indigo-200 transition-all" id={`bailleur-${bailleur}`}>
+                              {/* Bailleur Header Banner */}
+                              <div className="bg-indigo-50/30 px-8 py-5 border-b border-indigo-100/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                                  <span className="font-black text-indigo-950 text-sm tracking-wide">
+                                    Bailleur : {bailleur}
+                                  </span>
+                                </div>
+                                <span className="text-xs bg-red-50 text-red-800 font-black px-4 py-2 rounded-2xl font-mono flex items-center gap-1.5 border border-red-100">
+                                  Total dû : {formatAmount(data.totalUnpaid)} FCFA
+                                </span>
+                              </div>
+                              
+                              {/* Unpaid items for this Bailleur */}
+                              <div className="divide-y divide-gray-150/40 px-8">
+                                {data.items.map((p: any) => {
+                                  const rentPct = p.loyer > 0 ? Math.round((p.paye / p.loyer) * 100) : 0;
+                                  return (
+                                    <div key={`${p.reportId}_${p.itemIndex}`} className="py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-gray-50/30 -mx-8 px-8 transition-colors">
+                                      {/* Left side: tenant identification */}
+                                      <div className="space-y-1.5 min-w-0">
+                                        <p className="font-black text-gray-900 text-sm truncate flex items-center gap-2">
+                                          {p.fullName}
+                                          <span className="bg-indigo-50 text-indigo-800 text-[10px] px-2 py-0.5 rounded-md font-bold tracking-tight">
+                                            Villa {p.villaNumber || 'N/A'}
+                                          </span>
+                                        </p>
+                                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 font-bold font-mono">
+                                          <span className="text-indigo-600 bg-indigo-50/50 px-2.5 py-1 rounded-lg">
+                                            📅 {p.mois}
+                                          </span>
+                                          <span>•</span>
+                                          <span>Loyer attendu: {formatAmount(p.loyer)} {p.currency.trim()}</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Middle side: progress & numbers */}
+                                      <div className="flex items-center gap-6">
+                                        <div className="text-right space-y-1">
+                                          <div className="flex items-center justify-end gap-1.5">
+                                            <span className="text-xs text-gray-400 font-bold">Reste à payer :</span>
+                                            <span className="font-black text-red-600 text-sm font-mono bg-red-50 px-2 py-0.5 rounded-lg border border-red-100">
+                                              +{formatAmount(p.nonPaye)} {p.currency.trim()}
+                                            </span>
+                                          </div>
+                                          
+                                          <div className="flex items-center justify-end gap-2 text-[10px] text-gray-400 font-bold">
+                                            <span>Déjà réglé : {formatAmount(p.paye)} FCFA</span>
+                                            <div className="w-16 bg-gray-150 rounded-full h-1.5 overflow-hidden">
+                                              <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${rentPct}%` }} />
+                                            </div>
+                                            <span>({rentPct}%)</span>
+                                          </div>
+                                        </div>
+
+                                        {/* Right side: direct 1-click action buttons */}
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSingleTenantAutoPay(p.reportId, p.itemIndex)}
+                                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5 group"
+                                            title="Marquer comme payé en 1 clic et générer la quittance"
+                                          >
+                                            <Sparkles size={13} className="text-emerald-200 group-hover:scale-110 transition-transform" />
+                                            ⚡ Règlement Complet Direct
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedTenantPayment({
+                                                reportId: p.reportId,
+                                                itemIndex: p.itemIndex,
+                                                tenantName: p.fullName,
+                                                bailleurName: p.bailleurName,
+                                                mois: p.mois,
+                                                loyer: p.loyer,
+                                                paye: p.paye,
+                                                nonPaye: p.nonPaye,
+                                                currency: p.currency
+                                              });
+                                              setPaymentModalOpen(true);
+                                            }}
+                                            className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900 rounded-xl transition-all"
+                                            title="Saisir un acompte ou versement partiel"
+                                          >
+                                            <Coins size={14} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* 1. FILTERS & CONTROLS FOR SUIVI MENSUEL */}
                 <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col gap-6">
                   <div className="flex flex-wrap gap-4 items-center justify-between">
                     <div className="flex items-center gap-2 text-gray-800 font-bold">
@@ -1652,7 +2259,9 @@ const SuperAdminDashboard: React.FC = () => {
                   )}
                 </div>
               </>
-            ) : (
+            )}
+          </>
+        ) : (
               /* ANNUAL HEATMAP SECTION */
               <div className="space-y-8">
                 <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6 justify-between items-center">
