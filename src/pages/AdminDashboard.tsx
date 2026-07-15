@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { Link, Navigate } from 'react-router-dom';
-import { CreditCard, FileText, Receipt, LayoutDashboard, LogOut, FileBarChart, MessageSquare, ShieldCheck, Building, TrendingUp, Clock, ChevronRight, MessageCircle } from 'lucide-react';
+import { CreditCard, FileText, Receipt, LayoutDashboard, LogOut, FileBarChart, MessageSquare, ShieldCheck, Building, TrendingUp, Clock, ChevronRight, MessageCircle, FileSpreadsheet } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import Logo from '../components/Logo';
@@ -120,6 +120,7 @@ const AdminDashboard: React.FC = () => {
     { title: 'Contrats', icon: FileText, path: '/admin/contrats', color: 'bg-purple-500' },
     { title: 'Quittances', icon: Receipt, path: '/admin/quittances', color: 'bg-green-500' },
     { title: 'Bilans Mensuels', icon: FileBarChart, path: '/admin/bilans', color: 'bg-orange-500' },
+    { title: 'Factures Agence', icon: FileSpreadsheet, path: '/admin/factures', color: 'bg-teal-500' },
   ];
 
   // Recovery Rate computation
