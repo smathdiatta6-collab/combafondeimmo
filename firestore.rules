@@ -67,7 +67,8 @@ service cloud.firestore {
     function isSuperAdmin() {
       return isAuthenticated() &&
              (request.auth.token.get('email', '').lower() == "smathdiatta6@gmail.com" ||
-              request.auth.token.get('email', '').lower() == "elhadjisillyndiaye@icloud.com");
+              (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.email.lower() == "smathdiatta6@gmail.com"));
     }
 
     function isValidEmail(email) {

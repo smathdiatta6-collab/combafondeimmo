@@ -203,8 +203,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                   activeUser?.email?.toLowerCase() === "smathdiatta6@gmail.com" || 
                   activeUser?.email?.toLowerCase() === "elhadjisillyndiaye@icloud.com";
                   
-  const isSuperAdmin = activeUser?.email?.toLowerCase() === "smathdiatta6@gmail.com" ||
-                       activeUser?.email?.toLowerCase() === "elhadjisillyndiaye@icloud.com";
+  const isSuperAdmin = activeUser?.email?.toLowerCase() === "smathdiatta6@gmail.com";
 
   return (
     <FirebaseContext.Provider value={{ 

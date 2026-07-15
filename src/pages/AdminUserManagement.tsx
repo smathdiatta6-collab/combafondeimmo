@@ -114,8 +114,11 @@ const AdminUserManagement: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-bold text-gray-900">{u.displayName || 'Utilisateur'}</p>
-                          {(u.email === "smathdiatta6@gmail.com" || u.email?.toLowerCase() === "elhadjisillyndiaye@icloud.com") && (
-                            <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold uppercase">Propriétaire / Gérant</span>
+                          {u.email === "smathdiatta6@gmail.com" && (
+                            <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold uppercase">Propriétaire</span>
+                          )}
+                          {u.email?.toLowerCase() === "elhadjisillyndiaye@icloud.com" && (
+                            <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold uppercase">Gérant Principal</span>
                           )}
                         </div>
                       </div>
