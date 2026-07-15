@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { User, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
@@ -38,11 +38,31 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (currentUser) {
         setAuthError(null);
         const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDoc = await getDoc(userDocRef);
+        let userDoc = await getDoc(userDocRef);
         
+        // If the document doesn't exist yet but user is authenticated, check if we can restore/create it
+        if (!userDoc.exists()) {
+          const cleanedEmail = (currentUser.email || '').trim().toLowerCase();
+          const savedStr = localStorage.getItem('simulated_admin_user');
+          const saved = savedStr ? JSON.parse(savedStr) : null;
+          const emailToUse = cleanedEmail || (saved ? saved.email : '');
+          
+          if (emailToUse) {
+            const isEmailAdmin = emailToUse === "smathdiatta6@gmail.com" || emailToUse === "elhadjisillyndiaye@icloud.com";
+            const newProfile = {
+              email: emailToUse,
+              role: isEmailAdmin ? 'admin' : 'user',
+              displayName: currentUser.displayName || (saved ? saved.displayName : ''),
+              createdAt: new Date().toISOString()
+            };
+            await setDoc(userDocRef, newProfile);
+            userDoc = await getDoc(userDocRef);
+          }
+        }
+
         if (userDoc.exists()) {
           const profileData = userDoc.data();
-          const cleanedEmail = (currentUser.email || '').trim().toLowerCase();
+          const cleanedEmail = (profileData.email || '').trim().toLowerCase();
           const isEmailAdmin = cleanedEmail === "smathdiatta6@gmail.com" || cleanedEmail === "elhadjisillyndiaye@icloud.com";
           
           if (isEmailAdmin && profileData.role !== 'admin') {
@@ -52,21 +72,31 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           } else {
             setUserProfile(profileData);
           }
-        } else {
-          // Create a default profile if it doesn't exist
-          const cleanedEmail = (currentUser.email || '').trim().toLowerCase();
-          const isEmailAdmin = cleanedEmail === "smathdiatta6@gmail.com" || cleanedEmail === "elhadjisillyndiaye@icloud.com";
-          const newProfile = {
-            email: currentUser.email,
-            role: isEmailAdmin ? 'admin' : 'user',
-            displayName: currentUser.displayName || '',
-            createdAt: new Date().toISOString()
-          };
-          await setDoc(userDocRef, newProfile);
-          setUserProfile(newProfile);
         }
       } else {
-        setUserProfile(null);
+        // If there's no Firebase user, but we have a simulated user, try to sign them in anonymously!
+        const savedStr = localStorage.getItem('simulated_admin_user');
+        if (savedStr) {
+          try {
+            const saved = JSON.parse(savedStr);
+            console.log("Restoring admin session via anonymous login...", saved.email);
+            const userCredential = await signInAnonymously(auth);
+            const userDocRef = doc(db, 'users', userCredential.user.uid);
+            const profileData = {
+              email: saved.email,
+              role: 'admin',
+              displayName: saved.displayName,
+              createdAt: saved.createdAt || new Date().toISOString()
+            };
+            await setDoc(userDocRef, profileData);
+            setUserProfile(profileData);
+          } catch (err) {
+            console.error("Failed to restore anonymous admin session", err);
+            setUserProfile(null);
+          }
+        } else {
+          setUserProfile(null);
+        }
       }
       setLoading(false);
     });
@@ -107,19 +137,42 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return false;
     }
 
-    const displayName = cleanedEmail === "smathdiatta6@gmail.com" ? "Smath Diatta" : "Elhadji Silly Ndiaye";
-    const simUser = {
-      uid: "simulated_" + (cleanedEmail === "smathdiatta6@gmail.com" ? "smath" : "elhadji"),
-      email: cleanedEmail,
-      displayName: displayName,
-      createdAt: new Date().toISOString(),
-      isSimulated: true
-    };
+    try {
+      setLoading(true);
+      // Authenticate with Firebase Anonymously so Firestore calls have valid authentication claims
+      const userCredential = await signInAnonymously(auth);
+      const uid = userCredential.user.uid;
 
-    localStorage.setItem('simulated_admin_user', JSON.stringify(simUser));
-    setSimulatedUser(simUser);
-    setAuthError(null);
-    return true;
+      const displayName = cleanedEmail === "smathdiatta6@gmail.com" ? "Smath Diatta" : "Elhadji Silly Ndiaye";
+      const simUser = {
+        uid: uid,
+        email: cleanedEmail,
+        displayName: displayName,
+        createdAt: new Date().toISOString(),
+        isSimulated: true
+      };
+
+      // Create the Admin Profile document in Firestore under this anonymous UID
+      const profileData = {
+        email: cleanedEmail,
+        role: 'admin',
+        displayName: displayName,
+        createdAt: simUser.createdAt
+      };
+      
+      await setDoc(doc(db, 'users', uid), profileData);
+      localStorage.setItem('simulated_admin_user', JSON.stringify(simUser));
+      setSimulatedUser(simUser);
+      setUserProfile(profileData);
+      setAuthError(null);
+      setLoading(false);
+      return true;
+    } catch (error: any) {
+      console.error("Passcode login failed with firebase auth", error);
+      setAuthError("Erreur de connexion sécurisée Firebase. Veuillez réessayer.");
+      setLoading(false);
+      return false;
+    }
   };
 
   const logout = async () => {
@@ -133,13 +186,18 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const activeUser = user || simulatedUser;
   const activeProfile = userProfile || (simulatedUser ? {
     email: simulatedUser.email,
     role: 'admin',
     displayName: simulatedUser.displayName,
     createdAt: simulatedUser.createdAt
   } : null);
+
+  const activeUser = user ? {
+    ...user,
+    email: user.email || activeProfile?.email || simulatedUser?.email,
+    displayName: user.displayName || activeProfile?.displayName || simulatedUser?.displayName
+  } : simulatedUser;
 
   const isAdmin = activeProfile?.role === 'admin' || 
                   activeUser?.email === "smathdiatta6@gmail.com" || 

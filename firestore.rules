@@ -56,15 +56,15 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (isSuperAdmin() || 
-         request.auth.token.email == "elhadjisillyndiaye@icloud.com" ||
-         request.auth.token.email == "Elhadjisillyndiaye@icloud.com" ||
+         request.auth.token.get('email', '') == "elhadjisillyndiaye@icloud.com" ||
+         request.auth.token.get('email', '') == "Elhadjisillyndiaye@icloud.com" ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
     function isSuperAdmin() {
       return isAuthenticated() &&
-             request.auth.token.email == "smathdiatta6@gmail.com";
+             request.auth.token.get('email', '') == "smathdiatta6@gmail.com";
     }
 
     function isValidEmail(email) {
@@ -170,8 +170,18 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUserProfile(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
-      allow update: if isAuthenticated() && isOwner(userId) && isValidUserProfile(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUserProfile(request.resource.data) && 
+                      (request.resource.data.role == 'user' || 
+                       request.resource.data.email == "smathdiatta6@gmail.com" || 
+                       request.resource.data.email == "elhadjisillyndiaye@icloud.com" || 
+                       request.resource.data.email == "Elhadjisillyndiaye@icloud.com" || 
+                       isAdmin());
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUserProfile(request.resource.data) && 
+                      (request.resource.data.role == resource.data.role || 
+                       request.resource.data.email == "smathdiatta6@gmail.com" || 
+                       request.resource.data.email == "elhadjisillyndiaye@icloud.com" || 
+                       request.resource.data.email == "Elhadjisillyndiaye@icloud.com" || 
+                       isAdmin());
     }
 
     // Default deny
