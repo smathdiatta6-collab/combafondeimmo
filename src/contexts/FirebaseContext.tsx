@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 interface FirebaseContextType {
@@ -108,7 +108,22 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setAuthError(null);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const userCredential = await signInWithPopup(auth, provider);
+      const email = userCredential.user.email?.toLowerCase();
+      if (email === "elhadjisillyndiaye@icloud.com") {
+        try {
+          await addDoc(collection(db, 'notifications'), {
+            title: "Connexion de gérant",
+            message: "Elhadji Silly Ndiaye s'est connecté à son compte (via Google).",
+            type: 'system',
+            createdAt: new Date().toISOString(),
+            read: false,
+            link: '/admin/super'
+          });
+        } catch (notifErr) {
+          console.error("Error creating login notification:", notifErr);
+        }
+      }
     } catch (error: any) {
       console.error("Login failed", error);
       if (error.code === 'auth/popup-blocked') {
@@ -127,14 +142,12 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const allowedEmails = ["smathdiatta6@gmail.com", "elhadjisillyndiaye@icloud.com"];
     
     if (!allowedEmails.includes(cleanedEmail)) {
-      setAuthError("Cette adresse email n'est pas autorisée à se connecter.");
-      return false;
+      throw new Error("Cette adresse email n'est pas autorisée à se connecter. Veuillez vérifier l'orthographe.");
     }
 
     const validPasscodes = ["coumba2026", "coumbafonde", "2026", "immo2026", "elhadji2026"];
     if (!validPasscodes.includes(passcode.trim().toLowerCase())) {
-      setAuthError("Code d'accès incorrect. Veuillez réessayer.");
-      return false;
+      throw new Error("Code d'accès incorrect. Veuillez réessayer.");
     }
 
     try {
@@ -160,7 +173,29 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: simUser.createdAt
       };
       
-      await setDoc(doc(db, 'users', uid), profileData);
+      try {
+        await setDoc(doc(db, 'users', uid), profileData);
+      } catch (firestoreErr: any) {
+        console.error("Failed to create user profile in Firestore:", firestoreErr);
+        throw new Error("La connexion Firebase a réussi mais l'enregistrement de votre profil administrateur a échoué (Erreur de permissions Firestore). Veuillez contacter l'administrateur principal.");
+      }
+
+      // Notify the owner that elhadji logged in
+      if (cleanedEmail === "elhadjisillyndiaye@icloud.com") {
+        try {
+          await addDoc(collection(db, 'notifications'), {
+            title: "Connexion de gérant",
+            message: "Elhadji Silly Ndiaye s'est connecté à son compte (via code d'accès).",
+            type: 'system',
+            createdAt: new Date().toISOString(),
+            read: false,
+            link: '/admin/super'
+          });
+        } catch (notifErr) {
+          console.error("Error creating passcode login notification:", notifErr);
+        }
+      }
+
       localStorage.setItem('simulated_admin_user', JSON.stringify(simUser));
       setSimulatedUser(simUser);
       setUserProfile(profileData);
@@ -169,9 +204,11 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return true;
     } catch (error: any) {
       console.error("Passcode login failed with firebase auth", error);
-      setAuthError("Erreur de connexion sécurisée Firebase. Veuillez réessayer.");
       setLoading(false);
-      return false;
+      if (error.code === 'auth/operation-not-allowed') {
+        throw new Error("La connexion par code d'accès (Anonyme) n'est pas activée dans la console Firebase. Veuillez demander à l'administrateur principal (smathdiatta6@gmail.com) d'activer le fournisseur 'Connexion anonyme' dans Authentication > Sign-in method dans sa console Firebase.");
+      }
+      throw new Error(error.message || "Erreur de connexion sécurisée Firebase. Veuillez réessayer.");
     }
   };
 

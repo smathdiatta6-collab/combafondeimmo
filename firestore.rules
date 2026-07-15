@@ -169,7 +169,7 @@ service cloud.firestore {
 
     match /properties/{propertyId} {
       allow read: if true;
-      allow write: if isSuperAdmin() && isValidProperty(request.resource.data);
+      allow write: if isAdmin() && (request.method == 'delete' || isValidProperty(request.resource.data));
     }
 
     match /users/{userId} {

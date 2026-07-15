@@ -31,7 +31,7 @@ const AdminProperties: React.FC = () => {
   const [isMigrating, setIsMigrating] = useState(false);
 
   useEffect(() => {
-    if (!isSuperAdmin) return;
+    if (!isAdmin) return;
 
     const q = query(collection(db, 'properties'), orderBy('title'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -65,7 +65,7 @@ const AdminProperties: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isSuperAdmin) return;
+    if (!isAdmin) return;
 
     try {
       const dataToSave = {
@@ -87,7 +87,7 @@ const AdminProperties: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!isSuperAdmin || !window.confirm('Voulez-vous vraiment supprimer ce bien ?')) return;
+    if (!isAdmin || !window.confirm('Voulez-vous vraiment supprimer ce bien ?')) return;
     try {
       await deleteDoc(doc(db, 'properties', id));
     } catch (error) {
@@ -156,7 +156,7 @@ const AdminProperties: React.FC = () => {
   };
 
   const migrateData = async () => {
-    if (!isSuperAdmin || isMigrating) return;
+    if (!isAdmin || isMigrating) return;
     if (!window.confirm('Voulez-vous importer les biens initiaux du site dans la base de données ? Cela vous permettra de les modifier.')) return;
 
     setIsMigrating(true);
@@ -188,7 +188,7 @@ const AdminProperties: React.FC = () => {
   };
 
   if (loading) return <div className="pt-32 text-center">Chargement...</div>;
-  if (!user || !isSuperAdmin) return <div className="pt-32 text-center">Accès refusé.</div>;
+  if (!user || !isAdmin) return <div className="pt-32 text-center">Accès refusé.</div>;
 
   return (
     <div className="pt-32 pb-24 min-h-screen bg-gray-50">

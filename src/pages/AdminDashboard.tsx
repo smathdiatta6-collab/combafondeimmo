@@ -102,7 +102,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const menuItems = [
-    ...(isSuperAdmin ? [{ title: 'Gestion des Biens', icon: LayoutDashboard, path: '/admin/biens', color: 'bg-indigo-500' }] : []),
+    ...(isAdmin ? [{ title: 'Gestion des Biens', icon: LayoutDashboard, path: '/admin/biens', color: 'bg-indigo-500' }] : []),
     { title: 'Messages', icon: MessageSquare, path: '/admin/messages', color: 'bg-pink-500', badge: unreadCount },
     ...(isSuperAdmin ? [{ title: 'Contrôle Activité', icon: ShieldCheck, path: '/admin/super', color: 'bg-red-600' }] : []),
     { title: 'Modes de Paiement', icon: CreditCard, path: '/admin/paiements', color: 'bg-blue-500' },
