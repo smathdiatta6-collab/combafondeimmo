@@ -56,14 +56,15 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (isSuperAdmin() || 
+         request.auth.token.email == "elhadjisillyndiaye@icloud.com" ||
+         request.auth.token.email == "Elhadjisillyndiaye@icloud.com" ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
     function isSuperAdmin() {
       return isAuthenticated() &&
-             (request.auth.token.email == "smathdiatta6@gmail.com" ||
-              request.auth.token.email == "Elhadjisillyndiaye@icloud.com");
+             request.auth.token.email == "smathdiatta6@gmail.com";
     }
 
     function isValidEmail(email) {

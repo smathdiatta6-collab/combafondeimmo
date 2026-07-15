@@ -41,14 +41,25 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const userDoc = await getDoc(userDocRef);
         
         if (userDoc.exists()) {
-          setUserProfile(userDoc.data());
+          const profileData = userDoc.data();
+          const cleanedEmail = (currentUser.email || '').trim().toLowerCase();
+          const isEmailAdmin = cleanedEmail === "smathdiatta6@gmail.com" || cleanedEmail === "elhadjisillyndiaye@icloud.com";
+          
+          if (isEmailAdmin && profileData.role !== 'admin') {
+            const updatedProfile = { ...profileData, role: 'admin' };
+            await setDoc(userDocRef, updatedProfile, { merge: true });
+            setUserProfile(updatedProfile);
+          } else {
+            setUserProfile(profileData);
+          }
         } else {
           // Create a default profile if it doesn't exist
-          const isEmailAdmin = currentUser.email === "smathdiatta6@gmail.com" || currentUser.email === "Elhadjisillyndiaye@icloud.com";
+          const cleanedEmail = (currentUser.email || '').trim().toLowerCase();
+          const isEmailAdmin = cleanedEmail === "smathdiatta6@gmail.com" || cleanedEmail === "elhadjisillyndiaye@icloud.com";
           const newProfile = {
             email: currentUser.email,
             role: isEmailAdmin ? 'admin' : 'user',
-            displayName: currentUser.displayName,
+            displayName: currentUser.displayName || '',
             createdAt: new Date().toISOString()
           };
           await setDoc(userDocRef, newProfile);
