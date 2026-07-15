@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType, cleanFirestoreData } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { 
   FileBarChart, Trash2, Plus, Minus, ArrowLeft, Download, UserPlus, X, Edit2, Search, Copy, Settings, 
@@ -606,21 +606,21 @@ const AdminMonthlyReports: React.FC = () => {
     
     setIsSaving(true);
     try {
-      const reportToSave = { ...newReport };
+      const reportToSave = cleanFirestoreData({ ...newReport });
 
       if (editingId) {
         await updateDoc(doc(db, 'monthlyReports', editingId), {
           ...reportToSave,
-          updatedByUID: user?.uid,
-          updatedByName: user?.displayName || user?.email,
+          updatedByUID: user?.uid || null,
+          updatedByName: user?.displayName || user?.email || 'Gérant',
           updatedAt: new Date().toISOString()
         });
         alert('Bilan mis à jour avec succès !');
       } else {
         await addDoc(collection(db, 'monthlyReports'), {
           ...reportToSave,
-          createdByUID: user?.uid,
-          createdByName: user?.displayName || user?.email,
+          createdByUID: user?.uid || null,
+          createdByName: user?.displayName || user?.email || 'Gérant',
           createdAt: new Date().toISOString()
         });
         alert('Bilan enregistré avec succès !');
@@ -659,7 +659,11 @@ const AdminMonthlyReports: React.FC = () => {
       fetchReports();
     } catch (error) {
       console.error('Error saving report:', error);
-      handleFirestoreError(error, editingId ? OperationType.UPDATE : OperationType.CREATE, 'monthlyReports');
+      try {
+        handleFirestoreError(error, editingId ? OperationType.UPDATE : OperationType.CREATE, 'monthlyReports');
+      } catch (err) {
+        // Suppress re-throw to avoid unhandled promise rejection crashing the React rendering tree/UI
+      }
     } finally {
       setIsSaving(false);
     }

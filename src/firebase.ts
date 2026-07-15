@@ -60,9 +60,32 @@ export interface FirestoreErrorInfo {
   }
 }
 
+export function cleanFirestoreData(data: any): any {
+  if (data === undefined) return null;
+  if (data === null) return null;
+  if (Array.isArray(data)) {
+    return data.map(item => cleanFirestoreData(item));
+  }
+  if (typeof data === 'object') {
+    if (data instanceof Date) {
+      return data.toISOString();
+    }
+    const cleaned: any = {};
+    for (const key of Object.keys(data)) {
+      const val = data[key];
+      if (val !== undefined) {
+        cleaned[key] = cleanFirestoreData(val);
+      }
+    }
+    return cleaned;
+  }
+  return data;
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errMessage = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -80,5 +103,16 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
+  
+  let friendlyMsg = "Une erreur est survenue avec la base de données.";
+  if (errMessage.includes("permission-denied") || errMessage.includes("Missing or insufficient permissions")) {
+    friendlyMsg = "Accès refusé : Vous n'avez pas les autorisations nécessaires pour effectuer cette action.";
+  } else if (errMessage.includes("unsupported field value: undefined")) {
+    friendlyMsg = "Erreur de données : Une valeur non définie a été envoyée. Veuillez vérifier tous les champs du formulaire.";
+  } else {
+    friendlyMsg = `Erreur (${operationType} sur ${path}): ${errMessage}`;
+  }
+  
+  alert(friendlyMsg);
   throw new Error(JSON.stringify(errInfo));
 }
