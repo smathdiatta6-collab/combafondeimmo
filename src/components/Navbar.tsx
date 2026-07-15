@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Building2, Briefcase, Mail, User, ShieldCheck, Menu, X } from 'lucide-react';
+import { Home, Building2, Briefcase, Mail, User, ShieldCheck, Menu, X, LogOut } from 'lucide-react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { motion, AnimatePresence } from 'motion/react';
 import Logo from './Logo';
@@ -9,7 +9,7 @@ import NotificationBell from './NotificationBell';
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
-  const { user, isAdmin, login } = useFirebase();
+  const { user, isAdmin, login, logout } = useFirebase();
 
   // Close menu when route changes
   useEffect(() => {
@@ -72,7 +72,25 @@ export default function Navbar() {
                 <User size={18} />
                 Connexion
               </button>
-            ) : null}
+            ) : (
+              <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl px-3 py-1.5 shrink-0 max-w-[200px] lg:max-w-[280px]">
+                <div className="flex flex-col items-start min-w-0">
+                  <span className="text-[11px] text-gray-400 font-bold uppercase truncate max-w-full">
+                    {user.displayName || 'Utilisateur'}
+                  </span>
+                  <span className="text-[10px] text-gray-500 font-mono truncate max-w-full" title={user.email || ''}>
+                    {user.email}
+                  </span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="p-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors shrink-0"
+                  title="Déconnexion"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            )}
 
             <Link
               to="/contact"
@@ -139,7 +157,7 @@ export default function Navbar() {
                 </div>
               )}
 
-              {!user && (
+              {!user ? (
                 <button
                   onClick={login}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 font-medium hover:bg-gray-50 hover:text-blue-700 transition-colors"
@@ -147,6 +165,24 @@ export default function Navbar() {
                   <User size={20} />
                   Connexion
                 </button>
+              ) : (
+                <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-100">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-400 uppercase">
+                      {user.displayName || 'Utilisateur'}
+                    </span>
+                    <span className="text-xs text-gray-500 font-mono truncate">
+                      {user.email}
+                    </span>
+                  </div>
+                  <button
+                    onClick={logout}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 font-bold bg-white border border-red-100 hover:bg-red-50 hover:text-red-700 transition-colors"
+                  >
+                    <LogOut size={20} />
+                    Déconnexion
+                  </button>
+                </div>
               )}
 
               <Link

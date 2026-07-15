@@ -31,9 +31,10 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setUserProfile(userDoc.data());
         } else {
           // Create a default profile if it doesn't exist
+          const isEmailAdmin = currentUser.email === "smathdiatta6@gmail.com" || currentUser.email === "Elhadjisillyndiaye@icloud.com";
           const newProfile = {
             email: currentUser.email,
-            role: 'user',
+            role: isEmailAdmin ? 'admin' : 'user',
             displayName: currentUser.displayName,
             createdAt: new Date().toISOString()
           };
@@ -66,7 +67,9 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const isAdmin = userProfile?.role === 'admin' || user?.email === "smathdiatta6@gmail.com";
+  const isAdmin = userProfile?.role === 'admin' || 
+                  user?.email === "smathdiatta6@gmail.com" || 
+                  user?.email === "Elhadjisillyndiaye@icloud.com";
   const isSuperAdmin = user?.email === "smathdiatta6@gmail.com";
 
   return (
