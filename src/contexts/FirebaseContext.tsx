@@ -9,6 +9,8 @@ interface FirebaseContextType {
   loading: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  authError: string | null;
+  setAuthError: (err: string | null) => void;
   login: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -19,11 +21,13 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        setAuthError(null);
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userDoc = await getDoc(userDocRef);
         
@@ -51,17 +55,26 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const login = async () => {
+    setAuthError(null);
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
+      if (error.code === 'auth/popup-blocked') {
+        setAuthError("Le pop-up de connexion a été bloqué par votre navigateur. Veuillez autoriser les pop-ups ou ouvrir l'application dans un nouvel onglet.");
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setAuthError("La fenêtre de connexion a été fermée avant la fin de l'authentification.");
+      } else {
+        setAuthError("La connexion a échoué. Veuillez ouvrir l'application dans un nouvel onglet et réessayer.");
+      }
     }
   };
 
   const logout = async () => {
     try {
       await signOut(auth);
+      setAuthError(null);
     } catch (error) {
       console.error("Logout failed", error);
     }
@@ -73,7 +86,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const isSuperAdmin = user?.email === "smathdiatta6@gmail.com";
 
   return (
-    <FirebaseContext.Provider value={{ user, userProfile, loading, isAdmin, isSuperAdmin, login, logout }}>
+    <FirebaseContext.Provider value={{ user, userProfile, loading, isAdmin, isSuperAdmin, authError, setAuthError, login, logout }}>
       {children}
     </FirebaseContext.Provider>
   );

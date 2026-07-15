@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Building2, Briefcase, Mail, User, ShieldCheck, Menu, X, LogOut } from 'lucide-react';
+import { Home, Building2, Briefcase, Mail, User, ShieldCheck, Menu, X, LogOut, AlertCircle, ExternalLink } from 'lucide-react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { motion, AnimatePresence } from 'motion/react';
 import Logo from './Logo';
@@ -9,7 +9,7 @@ import NotificationBell from './NotificationBell';
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
-  const { user, isAdmin, login, logout } = useFirebase();
+  const { user, isAdmin, login, logout, authError, setAuthError } = useFirebase();
 
   // Close menu when route changes
   useEffect(() => {
@@ -111,6 +111,45 @@ export default function Navbar() {
           </button>
         </div>
       </div>
+
+      {/* Authentication Error Banner */}
+      <AnimatePresence>
+        {authError && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="bg-amber-600 text-white font-sans text-sm py-3.5 px-4 shadow-md border-t border-amber-700 flex justify-between items-center z-55 relative gap-3"
+          >
+            <div className="max-w-7xl mx-auto w-full flex flex-col md:flex-row items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle size={20} className="shrink-0 text-amber-100" />
+                <span className="font-semibold leading-relaxed text-left text-xs sm:text-sm">
+                  {authError}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <a
+                  href={window.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-white text-amber-950 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 hover:bg-amber-50 transition-colors shadow-sm"
+                >
+                  <ExternalLink size={14} />
+                  Ouvrir dans un nouvel onglet
+                </a>
+                <button
+                  onClick={() => setAuthError(null)}
+                  className="p-1 hover:bg-white/20 rounded-lg transition-colors text-white"
+                  aria-label="Fermer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Mobile Navigation Overlay */}
       <AnimatePresence>
