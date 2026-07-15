@@ -58,10 +58,17 @@ const AdminUserManagement: React.FC = () => {
   return (
     <div className="pt-32 pb-24 min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Link to="/admin/super" className="flex items-center gap-2 text-gray-600 hover:text-blue-600 font-medium mb-8 transition-colors group">
-          <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-          Retour au Contrôle Activité
-        </Link>
+        {user?.email?.toLowerCase() === 'smathdiatta6@gmail.com' ? (
+          <Link to="/admin/super" className="flex items-center gap-2 text-gray-600 hover:text-blue-600 font-medium mb-8 transition-colors group">
+            <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+            Retour au Contrôle Activité
+          </Link>
+        ) : (
+          <Link to="/admin" className="flex items-center gap-2 text-gray-600 hover:text-blue-600 font-medium mb-8 transition-colors group">
+            <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+            Retour au Dashboard
+          </Link>
+        )}
 
         <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
           <div className="flex items-center gap-6">
@@ -107,8 +114,8 @@ const AdminUserManagement: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-bold text-gray-900">{u.displayName || 'Utilisateur'}</p>
-                          {u.email === "smathdiatta6@gmail.com" && (
-                            <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold uppercase">Propriétaire</span>
+                          {(u.email === "smathdiatta6@gmail.com" || u.email?.toLowerCase() === "elhadjisillyndiaye@icloud.com") && (
+                            <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold uppercase">Propriétaire / Gérant</span>
                           )}
                         </div>
                       </div>
@@ -134,7 +141,7 @@ const AdminUserManagement: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      {u.email !== "smathdiatta6@gmail.com" ? (
+                      {(u.email !== "smathdiatta6@gmail.com" && u.email?.toLowerCase() !== "elhadjisillyndiaye@icloud.com") ? (
                         <button
                           onClick={() => toggleAdminRole(u.id, u.role)}
                           disabled={isUpdating === u.id}

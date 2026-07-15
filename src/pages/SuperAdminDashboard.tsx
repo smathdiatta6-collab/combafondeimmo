@@ -1242,7 +1242,7 @@ const SuperAdminDashboard: React.FC = () => {
   }, [reports, selectedTenantHistory, suiviYear]);
 
   if (loading) return <div className="pt-32 text-center">Chargement...</div>;
-  if (!user || !isSuperAdmin) return <Navigate to="/" />;
+  if (!user || !isSuperAdmin || user.email?.toLowerCase() !== 'smathdiatta6@gmail.com') return <Navigate to="/" />;
 
   return (
     <div className="pt-32 pb-24 min-h-screen bg-gray-50">

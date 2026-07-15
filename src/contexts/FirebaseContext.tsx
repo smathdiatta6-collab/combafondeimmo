@@ -200,11 +200,11 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   } : simulatedUser;
 
   const isAdmin = activeProfile?.role === 'admin' || 
-                  activeUser?.email === "smathdiatta6@gmail.com" || 
-                  activeUser?.email === "Elhadjisillyndiaye@icloud.com" ||
-                  activeUser?.email === "elhadjisillyndiaye@icloud.com";
+                  activeUser?.email?.toLowerCase() === "smathdiatta6@gmail.com" || 
+                  activeUser?.email?.toLowerCase() === "elhadjisillyndiaye@icloud.com";
                   
-  const isSuperAdmin = activeUser?.email === "smathdiatta6@gmail.com";
+  const isSuperAdmin = activeUser?.email?.toLowerCase() === "smathdiatta6@gmail.com" ||
+                       activeUser?.email?.toLowerCase() === "elhadjisillyndiaye@icloud.com";
 
   return (
     <FirebaseContext.Provider value={{ 
