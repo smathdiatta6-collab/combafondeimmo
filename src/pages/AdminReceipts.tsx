@@ -255,6 +255,7 @@ const AdminReceipts: React.FC = () => {
           boldPeriodDates: false,
           boldFaitA: false,
           createdByUID: user?.uid,
+          createdBy: user?.email?.toLowerCase() || '',
           createdByName: user?.displayName || user?.email,
           createdAt: new Date().toISOString()
         });
@@ -288,7 +289,18 @@ const AdminReceipts: React.FC = () => {
   const fetchReceipts = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'receipts'));
-      const fetchedReceipts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      const allReceipts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      
+      const currentUserEmail = user?.email?.toLowerCase();
+      const fetchedReceipts = allReceipts.filter(r => {
+        const itemCreatedBy = (r.createdBy || '').toLowerCase();
+        if (currentUserEmail === 'elhadjisillyndiaye@icloud.com') {
+          return itemCreatedBy === 'elhadjisillyndiaye@icloud.com';
+        } else {
+          return itemCreatedBy === '' || itemCreatedBy === 'smathdiatta6@gmail.com';
+        }
+      });
+
       // Sort alphabetically by bailleur name then client name
       fetchedReceipts.sort((a, b) => {
         const bA = (a.bailleurName || '').toLowerCase();
@@ -333,6 +345,7 @@ const AdminReceipts: React.FC = () => {
           paymentMethodId: 'Especes', 
           reference: '',
           createdByUID: user?.uid || '',
+          createdBy: user?.email?.toLowerCase() || '',
           createdByName: user?.displayName || user?.email || 'Admin',
           createdAt: new Date().toISOString()
         });

@@ -320,7 +320,18 @@ const AdminMonthlyReports: React.FC = () => {
   const fetchReports = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'monthlyReports'));
-      setReports(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const allReports = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      
+      const currentUserEmail = user?.email?.toLowerCase();
+      const filteredReports = allReports.filter(r => {
+        const itemCreatedBy = (r.createdBy || '').toLowerCase();
+        if (currentUserEmail === 'elhadjisillyndiaye@icloud.com') {
+          return itemCreatedBy === 'elhadjisillyndiaye@icloud.com';
+        } else {
+          return itemCreatedBy === '' || itemCreatedBy === 'smathdiatta6@gmail.com';
+        }
+      });
+      setReports(filteredReports);
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'monthlyReports');
     }
@@ -329,7 +340,18 @@ const AdminMonthlyReports: React.FC = () => {
   const fetchReceipts = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'receipts'));
-      setReceipts(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const allReceipts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      
+      const currentUserEmail = user?.email?.toLowerCase();
+      const filteredReceipts = allReceipts.filter(r => {
+        const itemCreatedBy = (r.createdBy || '').toLowerCase();
+        if (currentUserEmail === 'elhadjisillyndiaye@icloud.com') {
+          return itemCreatedBy === 'elhadjisillyndiaye@icloud.com';
+        } else {
+          return itemCreatedBy === '' || itemCreatedBy === 'smathdiatta6@gmail.com';
+        }
+      });
+      setReceipts(filteredReceipts);
     } catch (error) {
       console.error("Error fetching receipts:", error);
     }
@@ -350,7 +372,17 @@ const AdminMonthlyReports: React.FC = () => {
     try {
       // 1. Fetch latest receipts before syncing
       const querySnapshot = await getDocs(collection(db, 'receipts'));
-      const latestReceipts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      const allReceipts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      
+      const currentUserEmail = user?.email?.toLowerCase();
+      const latestReceipts = allReceipts.filter(r => {
+        const itemCreatedBy = (r.createdBy || '').toLowerCase();
+        if (currentUserEmail === 'elhadjisillyndiaye@icloud.com') {
+          return itemCreatedBy === 'elhadjisillyndiaye@icloud.com';
+        } else {
+          return itemCreatedBy === '' || itemCreatedBy === 'smathdiatta6@gmail.com';
+        }
+      });
       setReceipts(latestReceipts);
 
       if (latestReceipts.length === 0) {
@@ -620,6 +652,7 @@ const AdminMonthlyReports: React.FC = () => {
         await addDoc(collection(db, 'monthlyReports'), {
           ...reportToSave,
           createdByUID: user?.uid || null,
+          createdBy: user?.email?.toLowerCase() || '',
           createdByName: user?.displayName || user?.email || 'Gérant',
           createdAt: new Date().toISOString()
         });
@@ -824,7 +857,17 @@ const AdminMonthlyReports: React.FC = () => {
 
       // Fetch latest receipts from Firestore to check if one exists
       const receiptsSnap = await getDocs(collection(db, 'receipts'));
-      const currentReceipts = receiptsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      const allReceipts = receiptsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      
+      const currentUserEmail = user?.email?.toLowerCase();
+      const currentReceipts = allReceipts.filter(r => {
+        const itemCreatedBy = (r.createdBy || '').toLowerCase();
+        if (currentUserEmail === 'elhadjisillyndiaye@icloud.com') {
+          return itemCreatedBy === 'elhadjisillyndiaye@icloud.com';
+        } else {
+          return itemCreatedBy === '' || itemCreatedBy === 'smathdiatta6@gmail.com';
+        }
+      });
 
       const isReceiptMatchingMonth = (r: any, targetMois: string) => {
         if (!r || !targetMois) return false;
@@ -914,6 +957,7 @@ const AdminMonthlyReports: React.FC = () => {
           issuePlace: 'Dakar',
           createdAt: new Date().toISOString(),
           createdByUID: user?.uid || '',
+          createdBy: user?.email?.toLowerCase() || '',
           createdByName: user?.displayName || user?.email || 'Admin',
           villaNumber: villaNumber,
         });

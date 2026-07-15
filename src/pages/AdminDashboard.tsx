@@ -54,8 +54,19 @@ const AdminDashboard: React.FC = () => {
       let collected = 0;
       let pending = 0;
       const pendingList: any[] = [];
+      const currentUserEmail = user?.email?.toLowerCase();
+
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
+        const itemCreatedBy = (data.createdBy || '').toLowerCase();
+
+        // Filter by user!
+        if (currentUserEmail === 'elhadjisillyndiaye@icloud.com') {
+          if (itemCreatedBy !== 'elhadjisillyndiaye@icloud.com') return;
+        } else {
+          if (itemCreatedBy !== '' && itemCreatedBy !== 'smathdiatta6@gmail.com') return;
+        }
+
         const amt = Number(data.amount) || 0;
         if (data.status === 'Payé') {
           collected += amt;
