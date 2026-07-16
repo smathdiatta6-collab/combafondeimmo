@@ -663,98 +663,114 @@ export const generateInvoicePDF = (invoice: any) => {
     const pageHeight = doc.internal.pageSize.getHeight(); // 297
     const margin = 15;
 
-    // Outer Border
-    doc.setDrawColor(200);
-    doc.setLineWidth(0.2);
+    // Outer Border (Very light and elegant)
+    doc.setDrawColor(220, 225, 235);
+    doc.setLineWidth(0.3);
     doc.rect(margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2));
 
-    // 1. Header (Logo & Agency Info)
-    const logoX = margin + 5;
+    // 1. Centered Header (Big Logo & Centered Agency Name)
+    const logoScale = 1.3;
+    const logoWidth = 48 * logoScale; // 62.4 mm
+    const logoX = (pageWidth - logoWidth) / 2;
     const logoY = margin + 8;
-    drawLogo(doc, logoX, logoY, 0.7);
-
-    // Agency Info (Right side)
-    doc.setTextColor(0, 33, 94); // Deep Blue
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('COUMBA FONDE IMMO', pageWidth - margin - 5, margin + 12, { align: 'right' });
     
+    // Draw centered logo and title
+    drawLogo(doc, logoX, logoY, logoScale);
+
+    // Center additional agency contact details below the logo
+    let agencyY = logoY + (24 * logoScale) + 3;
+
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    doc.setTextColor(80);
-    doc.text('Cité Gabon Villa N° 380 - Rufisque, Sénégal', pageWidth - margin - 5, margin + 17, { align: 'right' });
-    doc.text('Tél : +221 77 551 96 83', pageWidth - margin - 5, margin + 22, { align: 'right' });
-    doc.text('Email : coumbafonde@gmail.com', pageWidth - margin - 5, margin + 27, { align: 'right' });
-    doc.text('NINEA : 005265071 / RCCM : SN-DKR.2014-19303', pageWidth - margin - 5, margin + 32, { align: 'right' });
+    doc.setTextColor(80, 90, 110);
+    doc.text('Cité Gabon Villa N° 380 - Rufisque, Sénégal', pageWidth / 2, agencyY, { align: 'center' });
+    agencyY += 4.5;
+    doc.text('Tél : +221 77 551 96 83   |   Email : coumbafonde@gmail.com', pageWidth / 2, agencyY, { align: 'center' });
+    agencyY += 4.5;
+    doc.text('NINEA : 005265071  /  RCCM : SN-DKR.2014-19303', pageWidth / 2, agencyY, { align: 'center' });
+    agencyY += 6;
 
-    // Draw horizontal line
+    // Elegant deep blue divider line
     doc.setDrawColor(0, 33, 94);
     doc.setLineWidth(0.5);
-    doc.line(margin + 5, margin + 38, pageWidth - margin - 5, margin + 38);
+    doc.line(margin + 5, agencyY, pageWidth - margin - 5, agencyY);
 
-    // 2. Invoice Meta (Number, Date, Due Date) & Client Info
-    let currentY = margin + 46;
+    // 2. Invoice Meta Details & Client Info
+    let currentY = agencyY + 12;
 
-    // Left Column: Invoice details
+    // Left Column: Invoice Meta
     doc.setTextColor(0, 33, 94);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.text(`FACTURE N° : ${invoice.invoiceNumber}`, margin + 5, currentY);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9.5);
-    doc.setTextColor(50);
-    currentY += 6;
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    currentY += 7;
     doc.text(`Date d'émission : ${invoice.date ? new Date(invoice.date).toLocaleDateString('fr-FR') : ''}`, margin + 5, currentY);
+    
     if (invoice.dueDate) {
-      currentY += 5;
+      currentY += 5.5;
       doc.text(`Date d'échéance : ${new Date(invoice.dueDate).toLocaleDateString('fr-FR')}`, margin + 5, currentY);
     }
+    
     if (invoice.status) {
-      currentY += 5;
+      currentY += 5.5;
       doc.setFont('helvetica', 'bold');
-      doc.text(`Statut : ${invoice.status}`, margin + 5, currentY);
+      doc.text(`Statut : `, margin + 5, currentY);
+      const labelW = doc.getTextWidth(`Statut : `);
+      
+      if (invoice.status === 'Payé') {
+        doc.setTextColor(16, 124, 65); // Clear Green
+      } else if (invoice.status === 'Envoyé') {
+        doc.setTextColor(0, 90, 180); // Clear Blue
+      } else {
+        doc.setTextColor(220, 50, 50); // Red
+      }
+      doc.text(String(invoice.status).toUpperCase(), margin + 5 + labelW, currentY);
       doc.setFont('helvetica', 'normal');
     }
 
-    // Right Column: Client info Box
-    const clientBoxX = pageWidth - margin - 85;
-    const clientBoxY = margin + 43;
-    const clientBoxW = 80;
-    const clientBoxH = 32;
+    // Right Column: Client Box with rounded corners and soft background
+    const clientBoxW = 85;
+    const clientBoxH = 34;
+    const clientBoxX = pageWidth - margin - 5 - clientBoxW;
+    const clientBoxY = agencyY + 10;
 
-    doc.setDrawColor(220);
-    doc.setFillColor(248, 250, 252); // Soft gray/blue bg
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(218, 223, 230);
     doc.setLineWidth(0.3);
-    doc.rect(clientBoxX, clientBoxY, clientBoxW, clientBoxH, 'FD');
+    doc.roundedRect(clientBoxX, clientBoxY, clientBoxW, clientBoxH, 2, 2, 'FD');
 
     doc.setTextColor(0, 33, 94);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.text('FACTURÉ À :', clientBoxX + 4, clientBoxY + 6);
+    doc.setFontSize(9);
+    doc.text('FACTURÉ À :', clientBoxX + 5, clientBoxY + 6);
 
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('times', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(invoice.clientName || '...', clientBoxX + 4, clientBoxY + 13);
+    doc.text(invoice.clientName || '...', clientBoxX + 5, clientBoxY + 13);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(80);
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105);
     let clientY = clientBoxY + 19;
+    
     if (invoice.clientAddress) {
-      doc.text(invoice.clientAddress, clientBoxX + 4, clientY);
+      doc.text(invoice.clientAddress, clientBoxX + 5, clientY);
       clientY += 4.5;
     }
     if (invoice.clientPhone) {
-      doc.text(`Tél : ${invoice.clientPhone}`, clientBoxX + 4, clientY);
+      doc.text(`Tél : ${invoice.clientPhone}`, clientBoxX + 5, clientY);
       clientY += 4.5;
     }
     if (invoice.clientEmail) {
-      doc.text(`Email : ${invoice.clientEmail}`, clientBoxX + 4, clientY);
+      doc.text(`Email : ${invoice.clientEmail}`, clientBoxX + 5, clientY);
     }
 
-    // 3. Invoice Items Table
+    // 3. Invoice Items Table (More spaced, high-contrast, beautiful borders)
     currentY = Math.max(currentY + 12, clientBoxY + clientBoxH + 8);
 
     const tableHead = [['Quantité', 'Désignation', 'Prix Unitaire (FCFA)', 'Total (FCFA)']];
@@ -780,63 +796,79 @@ export const generateInvoicePDF = (invoice: any) => {
       },
       styles: {
         fontSize: 9,
-        cellPadding: 4,
+        cellPadding: 5.5, // Generous padding for high readability
         font: 'helvetica',
-        textColor: [0, 0, 0]
+        textColor: [30, 41, 59], // Dark slate color
+        lineColor: [203, 213, 225], // Clean light slate gray borders for high readability
+        lineWidth: 0.2, // Perfect visible lines
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252] // Extremely light blue-gray background for alternate rows
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 25 },
+        0: { halign: 'center', cellWidth: 22 },
         1: { halign: 'left' },
-        2: { halign: 'right', cellWidth: 45 },
-        3: { halign: 'right', cellWidth: 45 }
+        2: { halign: 'right', cellWidth: 42 },
+        3: { halign: 'right', cellWidth: 42 }
       }
     });
 
     let finalY = (doc as any).lastAutoTable.finalY + 8;
 
-    // 4. Totals Block (Right Aligned)
-    const totalsWidth = 75;
+    // 4. Totals Block (Elegant bordered card on the right side)
+    const totalsWidth = 80;
     const totalsX = pageWidth - margin - 5 - totalsWidth;
+    const totalsHeight = (invoice.taxRate > 0) ? 26 : 19;
 
+    doc.setFillColor(250, 251, 253);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(totalsX, finalY, totalsWidth, totalsHeight, 1.5, 1.5, 'FD');
+
+    let textY = finalY + 6;
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9.5);
-    doc.setTextColor(80);
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
 
     // Subtotal
-    doc.text('Sous-Total HT :', totalsX, finalY);
-    doc.text(`${safeToLocaleString(invoice.subTotal)} FCFA`, pageWidth - margin - 5, finalY, { align: 'right' });
-    finalY += 5;
+    doc.text('Sous-Total HT :', totalsX + 4, textY);
+    doc.text(`${safeToLocaleString(invoice.subTotal)} FCFA`, pageWidth - margin - 10, textY, { align: 'right' });
 
-    // TVA
+    // TVA if applicable
     if (invoice.taxRate > 0) {
-      doc.text(`TVA (${invoice.taxRate}%) :`, totalsX, finalY);
-      doc.text(`${safeToLocaleString(invoice.taxAmount)} FCFA`, pageWidth - margin - 5, finalY, { align: 'right' });
-      finalY += 5;
+      textY += 6;
+      doc.text(`TVA (${invoice.taxRate}%) :`, totalsX + 4, textY);
+      doc.text(`${safeToLocaleString(invoice.taxAmount)} FCFA`, pageWidth - margin - 10, textY, { align: 'right' });
     }
 
     // Total TTC
+    textY += 7;
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 33, 94);
     doc.setFontSize(11);
-    doc.text('Montant Total TTC :', totalsX, finalY);
-    doc.text(`${safeToLocaleString(invoice.totalAmount)} FCFA`, pageWidth - margin - 5, finalY, { align: 'right' });
-    finalY += 10;
+    doc.text('Montant Total TTC :', totalsX + 4, textY);
+    doc.text(`${safeToLocaleString(invoice.totalAmount)} FCFA`, pageWidth - margin - 10, textY, { align: 'right' });
+    
+    finalY += totalsHeight + 10;
 
-    // 5. Amount in Words
+    // 5. Amount in Words (Must be bold, formatted perfectly to fit page)
     const totalInWords = numberToWordsFrench(invoice.totalAmount);
     if (totalInWords) {
-      doc.setFont('times', 'italic');
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(9.5);
-      doc.setTextColor(40);
-      doc.text(`Arrêtée la présente facture à la somme de : ${totalInWords.toUpperCase()} FRANCS CFA.`, margin + 5, finalY);
-      finalY += 10;
+      doc.setTextColor(15, 23, 42); // Bold dark color
+      
+      const textToDraw = `Arrêtée la présente facture à la somme de : ${totalInWords.toUpperCase()} FRANCS CFA.`;
+      const splitText = doc.splitTextToSize(textToDraw, pageWidth - (margin * 2) - 10);
+      doc.text(splitText, margin + 5, finalY);
+      finalY += splitText.length * 5 + 6;
     }
 
     // Notes / Termes de paiement
     if (invoice.notes) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
-      doc.setTextColor(100);
+      doc.setTextColor(100, 116, 139);
       doc.text('Termes & Notes :', margin + 5, finalY);
       finalY += 4;
       doc.setFont('helvetica', 'normal');
@@ -848,19 +880,24 @@ export const generateInvoicePDF = (invoice: any) => {
     }
 
     // 6. Signatures & Footer
-    currentY = Math.max(finalY + 8, pageHeight - margin - 35);
+    currentY = Math.max(finalY + 12, pageHeight - margin - 35);
 
     // Lines for signature
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.line(margin + 10, currentY - 2, margin + 65, currentY - 2);
+    doc.line(pageWidth - margin - 75, currentY - 2, pageWidth - margin - 10, currentY - 2);
+
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(0, 33, 94);
-    doc.text('Le Client', margin + 15, currentY);
-    doc.text("L'Agence (Coumba Fonde Immo)", pageWidth - margin - 65, currentY);
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text('Signature du Client', margin + 15, currentY + 3);
+    doc.text("Pour l'Agence (Cachet & Signature)", pageWidth - margin - 70, currentY + 3);
 
     // Footer at the absolute bottom
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.setTextColor(120);
+    doc.setTextColor(148, 163, 184);
     const footerText = `Facture générée par Coumba Fonde Immo. Merci pour votre confiance.`;
     doc.text(footerText, pageWidth / 2, pageHeight - margin - 5, { align: 'center' });
 
