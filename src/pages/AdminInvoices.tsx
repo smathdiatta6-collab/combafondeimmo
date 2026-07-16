@@ -14,6 +14,7 @@ interface InvoiceItem {
   designation: string;
   unitPrice: number;
   totalPrice: number;
+  autoCalculate?: boolean;
 }
 
 interface InvoiceFormData {
@@ -48,7 +49,7 @@ const initialFormState: InvoiceFormData = {
   totalAmount: 0,
   notes: "Merci de régler cette facture sous 15 jours. Modalités de règlement : Espèces, Chèque ou Virement bancaire.",
   items: [
-    { quantity: 1, designation: '', unitPrice: 0, totalPrice: 0 }
+    { quantity: 1, designation: '', unitPrice: 0, totalPrice: 0, autoCalculate: true }
   ]
 };
 
@@ -115,7 +116,7 @@ const AdminInvoices: React.FC = () => {
   const handleAddItemRow = () => {
     setNewInvoice(prev => ({
       ...prev,
-      items: [...prev.items, { quantity: 1, designation: '', unitPrice: 0, totalPrice: 0 }]
+      items: [...prev.items, { quantity: 1, designation: '', unitPrice: 0, totalPrice: 0, autoCalculate: true }]
     }));
   };
 
@@ -125,9 +126,7 @@ const AdminInvoices: React.FC = () => {
     
     // Recalculate totals
     const subTotal = updatedItems.reduce((acc, item) => {
-      const q = Number(item.quantity) || 0;
-      const p = Number(item.unitPrice) || 0;
-      return acc + (q * p);
+      return acc + (Number(item.totalPrice) || 0);
     }, 0);
     const taxAmount = Math.round(subTotal * (Number(newInvoice.taxRate) || 0) / 100);
     const totalAmount = subTotal + taxAmount;
@@ -151,16 +150,20 @@ const AdminInvoices: React.FC = () => {
       currentItem.unitPrice = Number(value) || 0;
     } else if (field === 'designation') {
       currentItem.designation = String(value);
+    } else if (field === 'totalPrice') {
+      currentItem.totalPrice = Number(value) || 0;
+    } else if (field === 'autoCalculate') {
+      currentItem.autoCalculate = Boolean(value);
     }
 
-    currentItem.totalPrice = currentItem.quantity * currentItem.unitPrice;
+    if (currentItem.autoCalculate !== false) {
+      currentItem.totalPrice = currentItem.quantity * currentItem.unitPrice;
+    }
     updatedItems[index] = currentItem;
 
     // Recalculate totals
     const subTotal = updatedItems.reduce((acc, item) => {
-      const q = Number(item.quantity) || 0;
-      const p = Number(item.unitPrice) || 0;
-      return acc + (q * p);
+      return acc + (Number(item.totalPrice) || 0);
     }, 0);
     const taxAmount = Math.round(subTotal * (Number(newInvoice.taxRate) || 0) / 100);
     const totalAmount = subTotal + taxAmount;
@@ -191,7 +194,7 @@ const AdminInvoices: React.FC = () => {
       ...initialFormState,
       date: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      items: [{ quantity: 1, designation: '', unitPrice: 0, totalPrice: 0 }]
+      items: [{ quantity: 1, designation: '', unitPrice: 0, totalPrice: 0, autoCalculate: true }]
     });
     setEditingId(null);
     setIsAdding(true);
@@ -212,12 +215,19 @@ const AdminInvoices: React.FC = () => {
       taxAmount: Number(invoice.taxAmount) || 0,
       totalAmount: Number(invoice.totalAmount) || 0,
       notes: invoice.notes || '',
-      items: (invoice.items || []).map((it: any) => ({
-        quantity: Number(it.quantity) || 1,
-        designation: it.description || it.designation || '',
-        unitPrice: Number(it.unitPrice) || 0,
-        totalPrice: Number(it.totalPrice) || 0
-      }))
+      items: (invoice.items || []).map((it: any) => {
+        const qty = Number(it.quantity) || 1;
+        const up = Number(it.unitPrice) || 0;
+        const tp = Number(it.totalPrice) || 0;
+        const autoCalc = it.autoCalculate !== undefined ? Boolean(it.autoCalculate) : (tp === qty * up);
+        return {
+          quantity: qty,
+          designation: it.description || it.designation || '',
+          unitPrice: up,
+          totalPrice: tp,
+          autoCalculate: autoCalc
+        };
+      })
     });
     setEditingId(invoice.id);
     setIsAdding(true);
@@ -595,8 +605,9 @@ const AdminInvoices: React.FC = () => {
                     <tr className="border-b border-gray-100">
                       <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-16 text-center">Quantité</th>
                       <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Désignation *</th>
-                      <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-48 text-right">Prix Unitaire (FCFA) *</th>
-                      <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-48 text-right">Prix Total (FCFA)</th>
+                      <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-44 text-right">Prix Unitaire (FCFA) *</th>
+                      <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-28 text-center">Calcul Auto</th>
+                      <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-44 text-right">Prix Total (FCFA)</th>
                       <th className="py-3 w-12"></th>
                     </tr>
                   </thead>
@@ -633,8 +644,32 @@ const AdminInvoices: React.FC = () => {
                             className="w-full text-right py-2 bg-transparent border-b border-transparent group-hover:border-gray-200 focus:border-indigo-500 outline-none transition-all text-sm font-mono font-semibold"
                           />
                         </td>
-                        <td className="py-3 text-right text-sm font-mono font-bold text-gray-900">
-                          {formatAmount(item.totalPrice)}
+                        <td className="py-3 text-center">
+                          <div className="flex items-center justify-center">
+                            <input
+                              type="checkbox"
+                              checked={item.autoCalculate !== false}
+                              onChange={(e) => updateItemField(idx, 'autoCalculate', e.target.checked)}
+                              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                            />
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          {item.autoCalculate !== false ? (
+                            <div className="text-right py-2 text-sm font-mono font-bold text-gray-500 select-none pr-2">
+                              {formatAmount(item.totalPrice)}
+                            </div>
+                          ) : (
+                            <input
+                              type="number"
+                              min="0"
+                              required
+                              value={item.totalPrice}
+                              onChange={(e) => updateItemField(idx, 'totalPrice', e.target.value)}
+                              className="w-full text-right py-1.5 bg-indigo-50/50 border-b border-indigo-200 focus:border-indigo-500 outline-none transition-all text-sm font-mono font-bold text-indigo-700 rounded px-2"
+                              placeholder="Total Saisi"
+                            />
+                          )}
                         </td>
                         <td className="py-3 text-center">
                           <button
