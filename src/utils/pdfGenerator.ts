@@ -805,12 +805,12 @@ export const generateInvoicePDF = (invoice: any) => {
       body: tableBody,
       theme: 'grid',
       headStyles: {
-        fillColor: [240, 244, 250], // Elegant light gray-blue background
+        fillColor: [0, 33, 94], // Deep brand blue background
         halign: 'center',
         font: 'helvetica',
         fontStyle: 'bold',
-        textColor: [0, 33, 94], // Exact same deep blue color
-        fontSize: 13, // Identical clean, large, prominent font size
+        textColor: [255, 255, 255], // White text for strong contrast
+        fontSize: 13, // Keep the clean, large, prominent font size
       },
       styles: {
         fontSize: 13, // Identical clean, large, prominent font size for table contents
