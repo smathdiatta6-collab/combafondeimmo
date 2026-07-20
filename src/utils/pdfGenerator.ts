@@ -810,15 +810,16 @@ export const generateInvoicePDF = (invoice: any) => {
         font: 'helvetica',
         fontStyle: 'bold',
         textColor: [255, 255, 255],
-        fontSize: 11 // Larger headers
+        fontSize: 12 // Even larger header font
       },
       styles: {
-        fontSize: 10.5, // Larger table content font for excellent visibility
-        cellPadding: 6.5, // High-readability padding
+        fontSize: 11, // Larger table content font for excellent visibility
+        fontStyle: 'bold', // Make table contents bold as requested!
+        cellPadding: 7, // Even more generous padding for high readability
         font: 'helvetica',
-        textColor: [15, 23, 42], // Deep high-contrast slate-900 text
-        lineColor: [100, 116, 139], // Slate-500 bold, visible lines
-        lineWidth: 0.3,
+        textColor: [15, 23, 42], // Deep high-contrast text
+        lineColor: [71, 85, 105], // Solid visible borders
+        lineWidth: 0.4,
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252] // alternate row background
