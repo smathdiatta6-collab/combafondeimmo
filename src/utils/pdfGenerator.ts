@@ -805,19 +805,19 @@ export const generateInvoicePDF = (invoice: any) => {
       body: tableBody,
       theme: 'grid',
       headStyles: {
-        fillColor: [0, 33, 94],
+        fillColor: [240, 244, 250], // Elegant light gray-blue background
         halign: 'center',
         font: 'helvetica',
         fontStyle: 'bold',
-        textColor: [255, 255, 255],
-        fontSize: 12 // Even larger header font
+        textColor: [0, 33, 94], // Exact same deep blue color
+        fontSize: 13, // Identical clean, large, prominent font size
       },
       styles: {
-        fontSize: 11, // Larger table content font for excellent visibility
-        fontStyle: 'bold', // Make table contents bold as requested!
+        fontSize: 13, // Identical clean, large, prominent font size for table contents
+        fontStyle: 'bold', // Perfectly bold as requested!
         cellPadding: 7, // Even more generous padding for high readability
         font: 'helvetica',
-        textColor: [15, 23, 42], // Deep high-contrast text
+        textColor: [0, 33, 94], // Exact same deep blue color for maximum contrast and readability
         lineColor: [71, 85, 105], // Solid visible borders
         lineWidth: 0.4,
       },
@@ -825,10 +825,10 @@ export const generateInvoicePDF = (invoice: any) => {
         fillColor: [248, 250, 252] // alternate row background
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 24 },
+        0: { halign: 'center', cellWidth: 26 },
         1: { halign: 'left' },
-        2: { halign: 'right', cellWidth: 46 },
-        3: { halign: 'right', cellWidth: 46 }
+        2: { halign: 'right', cellWidth: 48 },
+        3: { halign: 'right', cellWidth: 48 }
       }
     });
 
