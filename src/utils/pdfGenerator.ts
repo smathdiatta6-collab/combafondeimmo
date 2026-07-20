@@ -911,20 +911,11 @@ export const generateInvoicePDF = (invoice: any) => {
     doc.setDrawColor(100, 116, 139);
     doc.setLineWidth(0.4);
     doc.line(margin + 10, currentY - 2, margin + 65, currentY - 2);
-    doc.line(pageWidth - margin - 75, currentY - 2, pageWidth - margin - 10, currentY - 2);
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
     doc.text('Signature du Client', margin + 12, currentY + 4);
-    doc.text("Pour l'Agence (Cachet & Signature)", pageWidth - margin - 72, currentY + 4);
-
-    // Footer at the absolute bottom
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(71, 85, 105);
-    const footerText = `Facture générée par Coumba Fonde Immo. Merci pour votre confiance.`;
-    doc.text(footerText, pageWidth / 2, pageHeight - margin - 6, { align: 'center' });
 
     doc.save(`Facture_${invoice.invoiceNumber}_${invoice.clientName.replace(/\s+/g, '_')}.pdf`);
   } catch (error) {
