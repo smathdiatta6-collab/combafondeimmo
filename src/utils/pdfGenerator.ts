@@ -924,3 +924,364 @@ export const generateInvoicePDF = (invoice: any) => {
     alert('Erreur lors de la génération de la facture PDF.');
   }
 };
+
+export const generateFurnishedStayPDF = (stay: any) => {
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 12;
+    let currentY = margin;
+
+    // Header Background Accent Line
+    doc.setFillColor(0, 33, 94); // Deep navy blue
+    doc.rect(0, 0, pageWidth, 6, 'F');
+    doc.setFillColor(249, 115, 22); // Orange accent
+    doc.rect(0, 6, pageWidth, 2, 'F');
+
+    currentY = 12;
+
+    // Logo + Agency Header
+    const logoScale = 0.5;
+    drawLogo(doc, margin, currentY, logoScale);
+
+    // Agency Header Info
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(0, 33, 94);
+    doc.text('COUMBA FONDE IMMO', margin + 32, currentY + 7);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(249, 115, 22);
+    doc.text('GESTION IMMOBILIÈRE - APPARTEMENTS MEUBLÉS', margin + 32, currentY + 12);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text('Cité Gabon Villa N° 380 - Rufisque, Sénégal', margin + 32, currentY + 16.5);
+    doc.text('Tél : +221 77 551 96 83 | Email : coumbafonde@gmail.com', margin + 32, currentY + 20.5);
+    doc.text('NINEA : 005265071 / RCCM : SN-DKR.2014-19303', margin + 32, currentY + 24.5);
+
+    currentY += 28;
+
+    // Main Header Line
+    doc.setDrawColor(0, 33, 94);
+    doc.setLineWidth(0.8);
+    doc.line(margin, currentY, pageWidth - margin, currentY);
+
+    currentY += 6;
+
+    // Title Box: FICHE DE SÉJOUR - CONTRAT DE LOCATION APPARTEMENT MEUBLÉ
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(margin, currentY, pageWidth - (margin * 2), 15, 3, 3, 'F');
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(margin, currentY, pageWidth - (margin * 2), 15, 3, 3, 'D');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(0, 33, 94);
+    doc.text('FICHE DE SÉJOUR - APPARTEMENT MEUBLÉ', pageWidth / 2, currentY + 6, { align: 'center' });
+    
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+    const numText = stay.contractNumber ? `CONTRAT N° : ${stay.contractNumber} | ` : '';
+    const formattedDate = stay.date ? new Date(stay.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    doc.text(`${numText}DATE : ${formattedDate}`, pageWidth / 2, currentY + 11.5, { align: 'center' });
+
+    currentY += 19;
+
+    // 1. INFORMATION CLIENT BOX
+    doc.setFillColor(0, 33, 94);
+    doc.rect(margin, currentY, pageWidth - (margin * 2), 6.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('1. INFORMATION DU CLIENT', margin + 4, currentY + 4.5);
+
+    currentY += 6.5;
+
+    const clientBoxHeight = 22;
+    doc.setFillColor(250, 250, 250);
+    doc.rect(margin, currentY, pageWidth - (margin * 2), clientBoxHeight, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(margin, currentY, pageWidth - (margin * 2), clientBoxHeight, 'D');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    
+    // Row 1
+    doc.text('NOM COMPLET :', margin + 5, currentY + 6);
+    doc.setFont('helvetica', 'bold');
+    doc.text(stay.clientName || '.......................................................................', margin + 35, currentY + 6);
+
+    // Row 2
+    doc.setFont('helvetica', 'bold');
+    doc.text('TÉLÉPHONE :', margin + 5, currentY + 14);
+    doc.setFont('helvetica', 'normal');
+    doc.text(stay.clientPhone || '......................................', margin + 32, currentY + 14);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('CNI / PASSPORT :', margin + 100, currentY + 14);
+    doc.setFont('helvetica', 'normal');
+    doc.text(stay.clientIdentity || '......................................', margin + 135, currentY + 14);
+
+    currentY += clientBoxHeight + 5;
+
+    // 2. DÉTAILS DU SÉJOUR ET LOGEMENT BOX
+    doc.setFillColor(0, 33, 94);
+    doc.rect(margin, currentY, pageWidth - (margin * 2), 6.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('2. DÉTAILS DU SÉJOUR ET DU LOGEMENT', margin + 4, currentY + 4.5);
+
+    currentY += 6.5;
+
+    const stayBoxHeight = 30;
+    doc.setFillColor(250, 250, 250);
+    doc.rect(margin, currentY, pageWidth - (margin * 2), stayBoxHeight, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(margin, currentY, pageWidth - (margin * 2), stayBoxHeight, 'D');
+
+    // Durée options
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('DURÉE DU SÉJOUR :', margin + 5, currentY + 6);
+
+    const durations = ['3 JOURS', '1 SEMAINE', '2 SEMAINES', '1 MOIS', 'AUTRE'];
+    let durX = margin + 38;
+    durations.forEach((dur) => {
+      const isSelected = stay.stayDuration === dur || (dur === 'AUTRE' && !['3 JOURS', '1 SEMAINE', '2 SEMAINES', '1 MOIS'].includes(stay.stayDuration));
+      
+      doc.setDrawColor(0, 33, 94);
+      doc.setFillColor(isSelected ? 0 : 255, isSelected ? 33 : 255, isSelected ? 94 : 255);
+      doc.rect(durX, currentY + 2.5, 3.5, 3.5, isSelected ? 'FD' : 'D');
+      
+      if (isSelected) {
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(7);
+        doc.text('X', durX + 0.8, currentY + 5.2);
+      }
+
+      doc.setFont('helvetica', isSelected ? 'bold' : 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(15, 23, 42);
+      doc.text(dur, durX + 4.8, currentY + 5.3);
+
+      durX += dur === 'AUTRE' ? 18 : (dur === '2 SEMAINES' ? 28 : 24);
+    });
+
+    if (stay.customDuration) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Précision : ${stay.customDuration}`, margin + 38, currentY + 11.5);
+    }
+
+    // Housing Type
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('TYPE DE LOGEMENT :', margin + 5, currentY + 18);
+
+    const housingTypes = ['APPARTEMENT', 'STUDIO'];
+    let houseX = margin + 40;
+    housingTypes.forEach((ht) => {
+      const isSelected = (stay.housingType || '').toUpperCase().includes(ht);
+      doc.setDrawColor(0, 33, 94);
+      doc.setFillColor(isSelected ? 0 : 255, isSelected ? 33 : 255, isSelected ? 94 : 255);
+      doc.rect(houseX, currentY + 14.5, 3.5, 3.5, isSelected ? 'FD' : 'D');
+
+      if (isSelected) {
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(7);
+        doc.text('X', houseX + 0.8, currentY + 17.2);
+      }
+
+      doc.setFont('helvetica', isSelected ? 'bold' : 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(15, 23, 42);
+      doc.text(ht, houseX + 4.8, currentY + 17.3);
+
+      houseX += 32;
+    });
+
+    if (stay.propertyName) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text(`[${stay.propertyName}]`, houseX + 10, currentY + 17.3);
+    }
+
+    // Amount
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 33, 94);
+    doc.text('MONTANT DU PAIEMENT :', margin + 5, currentY + 25);
+    doc.setFontSize(11);
+    doc.setTextColor(22, 101, 52); // Bold green
+    doc.text(`${safeToLocaleString(stay.amount)} FCFA`, margin + 55, currentY + 25);
+
+    currentY += stayBoxHeight + 5;
+
+    // 3. CONDITIONS ENUMÉRÉES DE LOCATION
+    doc.setFillColor(0, 33, 94);
+    doc.rect(margin, currentY, pageWidth - (margin * 2), 6.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('3. CONDITIONS DU CONTRAT DE LOCATION', margin + 4, currentY + 4.5);
+
+    currentY += 6.5;
+
+    const conditions = [
+      "1. Interdiction de fumer à l'intérieur des chambres.",
+      "2. Interdiction d'amener des animaux sans accord préalable.",
+      "3. Interdiction absolue de sous-louer le logement.",
+      "4. Obligation de respecter la tranquillité du voisinage.",
+      "5. Le locataire est responsable de toute casse, perte ou dégradation du mobilier.",
+      "6. Les réparations dues à une mauvaise utilisation sont entièrement à sa charge.",
+      "7. En cas de manquement grave aux règles, le bailleur peut rompre le contrat immédiatement.",
+      "8. La société dégage toute responsabilité en cas d'incident lié à la consommation de drogue ou prostitution.",
+      "9. En cas de non-respect ou faute commise par le locataire, l'agence engagera des poursuites judiciaires."
+    ];
+
+    const condBoxHeight = 50;
+    doc.setFillColor(255, 255, 255);
+    doc.rect(margin, currentY, pageWidth - (margin * 2), condBoxHeight, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(margin, currentY, pageWidth - (margin * 2), condBoxHeight, 'D');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(51, 65, 85);
+
+    let condY = currentY + 4.5;
+    conditions.forEach((cond) => {
+      doc.text(cond, margin + 4, condY);
+      condY += 5;
+    });
+
+    currentY += condBoxHeight + 5;
+
+    // 4. HIGHLIGHTED NOTA BENE BOX (User Explicit Requirement)
+    doc.setFillColor(254, 243, 199); // Amber background
+    doc.roundedRect(margin, currentY, pageWidth - (margin * 2), 14, 3, 3, 'F');
+    doc.setDrawColor(245, 158, 11); // Amber border
+    doc.setLineWidth(0.8);
+    doc.roundedRect(margin, currentY, pageWidth - (margin * 2), 14, 3, 3, 'D');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(180, 83, 9);
+    doc.text('NOTA BENE :', margin + 5, currentY + 5.5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(180, 83, 9);
+    doc.text("• Une nuitée s'arrête à 12h (Midi).", margin + 32, currentY + 5.5);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(120, 53, 15);
+    doc.text("Option spécialement conçue pour la gestion de mon appartement meublé - Coumba Fonde Immo.", margin + 32, currentY + 10.5);
+
+    currentY += 18;
+
+    // 5. ACCEPTATION TERMES
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('ACCEPTEZ-VOUS LES TERMES ET CONDITIONS DE CE CONTRAT ?', margin, currentY);
+
+    // OUI
+    doc.setDrawColor(0, 33, 94);
+    doc.setFillColor(stay.acceptTerms !== false ? 0 : 255, stay.acceptTerms !== false ? 33 : 255, stay.acceptTerms !== false ? 94 : 255);
+    doc.rect(margin + 120, currentY - 3, 4, 4, stay.acceptTerms !== false ? 'FD' : 'D');
+    if (stay.acceptTerms !== false) {
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.text('X', margin + 120.8, currentY + 0.2);
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('OUI', margin + 126, currentY);
+
+    // NON
+    doc.setDrawColor(0, 33, 94);
+    doc.setFillColor(stay.acceptTerms === false ? 0 : 255, stay.acceptTerms === false ? 33 : 255, stay.acceptTerms === false ? 94 : 255);
+    doc.rect(margin + 140, currentY - 3, 4, 4, stay.acceptTerms === false ? 'FD' : 'D');
+    if (stay.acceptTerms === false) {
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.text('X', margin + 140.8, currentY + 0.2);
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('NON', margin + 146, currentY);
+
+    currentY += 12;
+
+    // 6. SIGNATURES
+    const sigWidth = (pageWidth - (margin * 2) - 15) / 2;
+
+    // Client signature box
+    doc.setFillColor(250, 250, 250);
+    doc.roundedRect(margin, currentY, sigWidth, 24, 2, 2, 'F');
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(margin, currentY, sigWidth, 24, 2, 2, 'D');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('SIGNATURE DU CLIENT :', margin + 4, currentY + 5);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('(Lu et approuvé)', margin + 4, currentY + 9);
+
+    // Agency signature box
+    const agencySigX = margin + sigWidth + 15;
+    doc.setFillColor(250, 250, 250);
+    doc.roundedRect(agencySigX, currentY, sigWidth, 24, 2, 2, 'F');
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(agencySigX, currentY, sigWidth, 24, 2, 2, 'D');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 33, 94);
+    doc.text("SIGNATURE DE L'AGENCE :", agencySigX + 4, currentY + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Coumba Fonde Immo', agencySigX + 4, currentY + 9);
+
+    currentY += 28;
+
+    // BON SÉJOUR FOOTER BANNER
+    doc.setFillColor(0, 33, 94);
+    doc.roundedRect(margin, currentY, pageWidth - (margin * 2), 9, 2, 2, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text('★   BON SÉJOUR AVEC COUMBA FONDE IMMO   ★', pageWidth / 2, currentY + 6, { align: 'center' });
+
+    // Footer contact notes
+    addFooter(doc, '380');
+
+    const fileName = `Contrat_Meuble_${(stay.clientName || 'Client').replace(/\s+/g, '_')}_${stay.date || ''}.pdf`;
+    doc.save(fileName);
+  } catch (error) {
+    console.error('Error generating furnished stay PDF:', error);
+    alert('Erreur lors de la génération de la fiche de séjour PDF.');
+  }
+};

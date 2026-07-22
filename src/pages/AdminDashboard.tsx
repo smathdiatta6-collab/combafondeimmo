@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
 import { Link, Navigate } from 'react-router-dom';
-import { CreditCard, FileText, Receipt, LayoutDashboard, LogOut, FileBarChart, MessageSquare, ShieldCheck, Building, TrendingUp, Clock, ChevronRight, MessageCircle, FileSpreadsheet } from 'lucide-react';
+import { CreditCard, FileText, Receipt, LayoutDashboard, LogOut, FileBarChart, MessageSquare, ShieldCheck, Building, TrendingUp, Clock, ChevronRight, MessageCircle, FileSpreadsheet, KeyRound } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import Logo from '../components/Logo';
@@ -118,6 +118,7 @@ const AdminDashboard: React.FC = () => {
     ...(isSuperAdmin ? [{ title: 'Contrôle Activité', icon: ShieldCheck, path: '/admin/super', color: 'bg-red-600' }] : []),
     { title: 'Modes de Paiement', icon: CreditCard, path: '/admin/paiements', color: 'bg-blue-500' },
     { title: 'Contrats', icon: FileText, path: '/admin/contrats', color: 'bg-purple-500' },
+    { title: 'Appartement Meublé', icon: KeyRound, path: '/admin/appartement-meuble', color: 'bg-amber-600' },
     { title: 'Quittances', icon: Receipt, path: '/admin/quittances', color: 'bg-green-500' },
     { title: 'Bilans Mensuels', icon: FileBarChart, path: '/admin/bilans', color: 'bg-orange-500' },
     { title: 'Factures Agence', icon: FileSpreadsheet, path: '/admin/factures', color: 'bg-teal-500' },

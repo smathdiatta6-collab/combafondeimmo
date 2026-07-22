@@ -89,6 +89,23 @@
         "displayName": { "type": "string" }
       },
       "required": ["email", "role"]
+    },
+    "FurnishedStay": {
+      "title": "Fiche de Séjour Meublé",
+      "description": "Contrat et fiche de séjour pour appartements meublés",
+      "type": "object",
+      "properties": {
+        "contractNumber": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "clientIdentity": { "type": "string" },
+        "stayDuration": { "type": "string" },
+        "housingType": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "acceptTerms": { "type": "boolean" }
+      },
+      "required": ["clientName", "amount", "date"]
     }
   },
   "firestore": {
@@ -107,6 +124,10 @@
     "/monthlyReports/{reportId}": {
       "schema": "MonthlyReport",
       "description": "Collection des bilans mensuels"
+    },
+    "/furnishedStays/{stayId}": {
+      "schema": "FurnishedStay",
+      "description": "Collection des fiches de séjour appartements meublés"
     },
     "/users/{userId}": {
       "schema": "UserProfile",

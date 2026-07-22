@@ -153,6 +153,10 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /furnishedStays/{stayId} {
+      allow read, write: if isAdmin();
+    }
+
     match /notifications/{notificationId} {
       allow read, write: if isAdmin();
     }

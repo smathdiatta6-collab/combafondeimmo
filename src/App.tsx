@@ -17,6 +17,7 @@ import AdminMessages from './pages/AdminMessages';
 import AdminUserManagement from './pages/AdminUserManagement';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import AdminInvoices from './pages/AdminInvoices';
+import AdminFurnishedStays from './pages/AdminFurnishedStays';
 import WhatsAppButton from './components/WhatsAppButton';
 
 export default function App() {
@@ -41,6 +42,7 @@ export default function App() {
               <Route path="/admin/quittances" element={<AdminReceipts />} />
               <Route path="/admin/bilans" element={<AdminMonthlyReports />} />
               <Route path="/admin/factures" element={<AdminInvoices />} />
+              <Route path="/admin/appartement-meuble" element={<AdminFurnishedStays />} />
               <Route path="/admin/messages" element={<AdminMessages />} />
               <Route path="/admin/users" element={<AdminUserManagement />} />
               <Route path="/admin/super" element={<SuperAdminDashboard />} />
