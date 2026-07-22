@@ -991,7 +991,17 @@ export const generateFurnishedStayPDF = (stay: any) => {
     doc.setFontSize(8.5);
     doc.setTextColor(100, 116, 139);
     const numText = stay.contractNumber ? `CONTRAT N° : ${stay.contractNumber} | ` : '';
-    const formattedDate = stay.date ? new Date(stay.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    let formattedDate = stay.date || '';
+    if (stay.date) {
+      try {
+        const d = new Date(stay.date.includes('T') ? stay.date : `${stay.date}T00:00:00`);
+        if (!isNaN(d.getTime())) {
+          formattedDate = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+        }
+      } catch (e) {
+        console.warn('Date parsing fallback:', e);
+      }
+    }
     doc.text(`${numText}DATE : ${formattedDate}`, pageWidth / 2, currentY + 11.5, { align: 'center' });
 
     currentY += 19;
@@ -1278,7 +1288,8 @@ export const generateFurnishedStayPDF = (stay: any) => {
     // Footer contact notes
     addFooter(doc, '380');
 
-    const fileName = `Contrat_Meuble_${(stay.clientName || 'Client').replace(/\s+/g, '_')}_${stay.date || ''}.pdf`;
+    const cleanClientName = (stay.clientName || 'Client').replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const fileName = `Contrat_Meuble_${cleanClientName}_${stay.date || 'date'}.pdf`;
     doc.save(fileName);
   } catch (error) {
     console.error('Error generating furnished stay PDF:', error);

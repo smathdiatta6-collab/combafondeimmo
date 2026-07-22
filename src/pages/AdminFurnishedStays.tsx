@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useFirebase } from '../contexts/FirebaseContext';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { KeyRound, Plus, ArrowLeft, Download, Edit2, Trash2, Search, CheckCircle2, Clock, Info, ShieldAlert, Sparkles, Building2, Calendar, User, Phone, FileBadge, DollarSign } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
@@ -63,7 +63,7 @@ const AdminFurnishedStays: React.FC = () => {
         if (currentUserEmail === 'elhadjisillyndiaye@icloud.com') {
           return itemCreatedBy === 'elhadjisillyndiaye@icloud.com';
         } else {
-          return itemCreatedBy === '' || itemCreatedBy === 'smathdiatta6@gmail.com';
+          return itemCreatedBy === '' || itemCreatedBy === 'smathdiatta6@gmail.com' || (currentUserEmail && itemCreatedBy === currentUserEmail);
         }
       });
 
@@ -71,12 +71,16 @@ const AdminFurnishedStays: React.FC = () => {
       setStays(filtered);
     } catch (error) {
       console.error('Error fetching furnished stays:', error);
+      handleFirestoreError(error, OperationType.LIST, 'furnishedStays');
     }
   };
 
   const handleOpenAdd = () => {
     setEditingId(null);
-    setFormData(initialFormState);
+    setFormData({
+      ...initialFormState,
+      date: new Date().toISOString().split('T')[0]
+    });
     setIsAdding(true);
   };
 
@@ -88,17 +92,27 @@ const AdminFurnishedStays: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.clientName || !formData.amount) {
-      alert('Veuillez remplir au moins le nom du client et le montant.');
+    if (!formData.clientName || !formData.clientName.trim()) {
+      alert('Veuillez renseigner le nom complet du client.');
+      return;
+    }
+
+    const numericAmount = Number(formData.amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      alert('Veuillez renseigner un montant de paiement valide supérieur à 0 FCFA.');
       return;
     }
 
     setIsSubmitting(true);
     try {
+      const currentUserEmail = user?.email?.toLowerCase() || '';
       const payload = {
         ...formData,
-        amount: Number(formData.amount),
-        createdBy: user?.email?.toLowerCase() || '',
+        clientName: formData.clientName.trim(),
+        clientPhone: (formData.clientPhone || '').trim(),
+        clientIdentity: (formData.clientIdentity || '').trim(),
+        amount: numericAmount,
+        createdBy: currentUserEmail,
         updatedAt: new Date().toISOString()
       };
 
@@ -115,9 +129,16 @@ const AdminFurnishedStays: React.FC = () => {
       setIsAdding(false);
       setEditingId(null);
       setFormData(initialFormState);
+
+      // Automatically generate and download PDF for immediate convenience
+      try {
+        generateFurnishedStayPDF(payload);
+      } catch (pdfErr) {
+        console.error('Error auto-generating PDF on save:', pdfErr);
+      }
     } catch (error) {
       console.error('Error saving furnished stay:', error);
-      alert('Erreur lors de l\'enregistrement.');
+      handleFirestoreError(error, editingId ? OperationType.UPDATE : OperationType.CREATE, 'furnishedStays');
     } finally {
       setIsSubmitting(false);
     }
@@ -130,7 +151,7 @@ const AdminFurnishedStays: React.FC = () => {
       await fetchStays();
     } catch (error) {
       console.error('Error deleting furnished stay:', error);
-      alert('Erreur lors de la suppression.');
+      handleFirestoreError(error, OperationType.DELETE, 'furnishedStays');
     }
   };
 
@@ -272,7 +293,7 @@ const AdminFurnishedStays: React.FC = () => {
                         {safeToLocaleString(stay.amount)} <span className="text-xs font-sans font-bold">FCFA</span>
                       </td>
                       <td className="py-4 px-6 text-xs text-gray-500 font-mono">
-                        {stay.date ? new Date(stay.date).toLocaleDateString('fr-FR') : '-'}
+                        {stay.date ? new Date(stay.date.includes('T') ? stay.date : `${stay.date}T00:00:00`).toLocaleDateString('fr-FR') : '-'}
                       </td>
                       <td className="py-4 px-6 text-right space-x-2">
                         <button
