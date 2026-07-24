@@ -1126,6 +1126,25 @@ const AdminMonthlyReports: React.FC = () => {
     };
   }, [reports, suiviMonth, suiviYear, suiviBailleur]);
 
+  // Compute unique landlords/bailleurs across all reports
+  const uniqueBailleursAll = React.useMemo(() => {
+    const names = new Set<string>();
+    reports.forEach(report => {
+      const b = (report.chez || '').trim();
+      if (b) names.add(b);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  }, [reports]);
+
+  const uniqueBailleursFiltered = React.useMemo(() => {
+    const names = new Set<string>();
+    filteredReports.forEach(report => {
+      const b = (report.chez || '').trim();
+      if (b) names.add(b);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  }, [filteredReports]);
+
   // Compute unique tenant names across all history
   const allUniqueTenantsList = React.useMemo(() => {
     const names = new Set<string>();
@@ -1281,7 +1300,58 @@ const AdminMonthlyReports: React.FC = () => {
           </button>
         </div>
         {activeTab === 'bilans' && (
-          <div className="mb-12 space-y-4">
+          <div className="mb-12 space-y-6">
+            {/* Top KPI Cards Overview */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {/* Card 1: Nombre de Bailleurs */}
+              <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Nombre de Bailleurs</p>
+                  <p className="text-3xl font-black text-blue-900">
+                    {uniqueBailleursAll.length} <span className="text-sm font-bold text-gray-500">Bailleur{uniqueBailleursAll.length > 1 ? 's' : ''}</span>
+                  </p>
+                  <p className="text-xs text-blue-700 font-semibold">
+                    {searchTerm || filterMonth || filterYear ? `${uniqueBailleursFiltered.length} sous les filtres` : 'Nombre exact enregistré'}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-blue-50 text-blue-900 rounded-2xl flex items-center justify-center">
+                  <Building size={24} />
+                </div>
+              </div>
+
+              {/* Card 2: Total des Bilans */}
+              <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Total des Bilans</p>
+                  <p className="text-3xl font-black text-gray-900">
+                    {filteredReports.length} <span className="text-sm font-bold text-gray-500">/{reports.length}</span>
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Document{filteredReports.length > 1 ? 's' : ''} au total
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center">
+                  <FileBarChart size={24} />
+                </div>
+              </div>
+
+              {/* Card 3: Locataires Actifs */}
+              <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Locataires Actifs</p>
+                  <p className="text-3xl font-black text-emerald-700">
+                    {allUniqueTenantsList.length} <span className="text-sm font-bold text-gray-500">Locataire{allUniqueTenantsList.length > 1 ? 's' : ''}</span>
+                  </p>
+                  <p className="text-xs text-emerald-600 font-semibold">
+                    Indexés dans la gestion
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
+                  <Users size={24} />
+                </div>
+              </div>
+            </div>
+
             <div className="relative max-w-4xl mx-auto flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -1557,7 +1627,9 @@ const AdminMonthlyReports: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center ml-1">
-                    <label className="text-sm font-bold text-gray-700">Chez (Bailleur)</label>
+                    <label className="text-sm font-bold text-gray-700">
+                      Chez (Bailleur) <span className="text-xs font-normal text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full font-mono font-semibold">({uniqueBailleursAll.length} bailleur{uniqueBailleursAll.length > 1 ? 's' : ''} au total)</span>
+                    </label>
                     <button 
                       type="button" 
                       onClick={() => {
@@ -1596,6 +1668,8 @@ const AdminMonthlyReports: React.FC = () => {
                     <input
                       type="text"
                       required
+                      list="bailleurs-autocomplete-list"
+                      placeholder="Nom du bailleur"
                       className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={newReport.chez}
                       onChange={(e) => {
@@ -1613,6 +1687,11 @@ const AdminMonthlyReports: React.FC = () => {
                         }
                       }}
                     />
+                    <datalist id="bailleurs-autocomplete-list">
+                      {uniqueBailleursAll.map(b => (
+                        <option key={b} value={b} />
+                      ))}
+                    </datalist>
                     {lastReportForBailleur && newReport.items.length === 0 && (
                       <button
                         type="button"
@@ -2597,8 +2676,8 @@ const AdminMonthlyReports: React.FC = () => {
                         value={suiviBailleur}
                         onChange={(e) => setSuiviBailleur(e.target.value)}
                       >
-                        <option value="all">Tous les Bailleurs</option>
-                        {Array.from(new Set(reports.map(r => r.chez).filter(Boolean))).map(b => (
+                        <option value="all">Tous les Bailleurs ({uniqueBailleursAll.length})</option>
+                        {uniqueBailleursAll.map(b => (
                           <option key={b} value={b}>{b}</option>
                         ))}
                       </select>
