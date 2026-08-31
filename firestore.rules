@@ -115,9 +115,10 @@ service cloud.firestore {
              data.city is string && data.city.size() > 0 && data.city.size() < 100 &&
              data.type in ["Maison", "Villa", "Terrain", "Appartement"] &&
              data.price is number && data.price >= 0 &&
-             data.description is string && data.description.size() > 0 && data.description.size() < 2000 &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 4000 &&
              data.image is string && data.image.size() > 0 &&
-             data.features is list && data.features.size() <= 20;
+             data.features is list && data.features.size() <= 30 &&
+             (!('images' in data) || (data.images is list && data.images.size() <= 30));
     }
 
     function isValidUserProfile(data) {

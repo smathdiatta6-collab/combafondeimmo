@@ -106,9 +106,32 @@
         "acceptTerms": { "type": "boolean" }
       },
       "required": ["clientName", "amount", "date"]
+    },
+    "Property": {
+      "title": "Bien Immobilier",
+      "description": "Fiche d'un bien immobilier en vente ou location",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "city": { "type": "string" },
+        "type": { "type": "string", "enum": ["Maison", "Villa", "Terrain", "Appartement"] },
+        "price": { "type": "number" },
+        "description": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "image": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "badge": { "type": "string" },
+        "bedrooms": { "type": "number" },
+        "bathrooms": { "type": "number" }
+      },
+      "required": ["title", "city", "type", "price", "description", "image"]
     }
   },
   "firestore": {
+    "/properties/{propertyId}": {
+      "schema": "Property",
+      "description": "Collection des biens immobiliers"
+    },
     "/paymentMethods/{methodId}": {
       "schema": "PaymentMethod",
       "description": "Collection des modes de paiement"

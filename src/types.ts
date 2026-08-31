@@ -7,6 +7,7 @@ export interface Property {
   description: string;
   features: string[];
   image: string;
+  images?: string[];
   badge?: string;
   bedrooms?: number;
   bathrooms?: number;
